@@ -4,7 +4,6 @@ const path = require('node:path');
 const { createApp, readBuildInfo } = require('./app');
 const { SpecProvider, DEFAULT_SPEC_PATH } = require('./spec');
 const { ItemStore } = require('./store');
-const { parseTrustedProxies } = require('./trusted-proxies');
 
 const log = (entry) => process.stdout.write(`${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`);
 
@@ -17,14 +16,6 @@ const port = intFromEnv('PORT', 3000);
 const specPath = process.env.SPEC_PATH || DEFAULT_SPEC_PATH;
 const watch = process.env.SPEC_WATCH === 'true';
 const frontendDir = process.env.SERVE_FRONTEND ? path.resolve(process.cwd(), process.env.SERVE_FRONTEND) : undefined;
-
-let trustedProxies;
-try {
-  trustedProxies = parseTrustedProxies(process.env.TRUSTED_PROXIES);
-} catch (err) {
-  log({ level: 'fatal', msg: 'invalid configuration', error: err.message });
-  process.exit(1);
-}
 
 let specProvider;
 try {
@@ -43,8 +34,7 @@ const app = createApp({
   buildInfo,
   frontendDir,
   state,
-  trustedProxies,
-  rateLimit: { max: intFromEnv('RATE_LIMIT_PER_MIN', 600), writeMax: intFromEnv('WRITE_RATE_LIMIT_PER_MIN', 60) },
+  rateLimit: { max: intFromEnv('RATE_LIMIT_PER_MIN', 6000), writeMax: intFromEnv('WRITE_RATE_LIMIT_PER_MIN', 60) },
   log,
 });
 
@@ -59,8 +49,7 @@ const server = app.listen(port, () => {
     specHash: specProvider.get().hash,
     watch,
     servingFrontend: Boolean(frontendDir),
-    trustedProxies,
-  });
+    });
 });
 
 // Outlive typical load balancer / proxy idle timeouts so keep-alive connections aren't reset mid-request.

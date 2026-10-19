@@ -13,11 +13,9 @@ configMapGenerator:
   - name: backend-config
     literals:
       - APP_ENVIRONMENT=base
-      # X-Forwarded-For is trusted ONLY from these peers (the nginx frontend pods, which sit in the
-      # cluster's private pod range; the NetworkPolicy also blocks every other source). If your pod
-      # CIDR is not RFC1918 (e.g. GKE with a custom/class-E range), replace with that CIDR.
-      - TRUSTED_PROXIES=uniquelocal
-      - RATE_LIMIT_PER_MIN=600
+      # Per-peer backstop (the peer is the frontend pod, so it covers all users behind it);
+      # per-client limits are enforced by nginx.
+      - RATE_LIMIT_PER_MIN=6000
       - WRITE_RATE_LIMIT_PER_MIN=60
 
 # Images are placed by the pipeline: Harness patches the containers with the exact artifact it

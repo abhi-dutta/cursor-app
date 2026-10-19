@@ -40,8 +40,6 @@ function readBuildInfo(env = process.env) {
  * @param {object} [deps.buildInfo]
  * @param {string} [deps.frontendDir]  serve the static frontend (local dev only)
  * @param {{ready: boolean}} [deps.state]  flipped to false while draining
- * @param {string[]} [deps.trustedProxies]  IPs/CIDRs/names of proxies allowed to set X-Forwarded-For.
- *   Empty (default) = trust nobody: req.ip is always the socket peer, so the header cannot be spoofed.
  * @param {{max?: number, writeMax?: number, windowMs?: number}} [deps.rateLimit]
  * @param {(entry: object) => void} [deps.log]  structured request logger
  */
@@ -51,7 +49,6 @@ function createApp({
   buildInfo = readBuildInfo(),
   frontendDir,
   state = { ready: true },
-  trustedProxies = [],
   rateLimit = {},
   log = jsonLog,
 }) {
@@ -60,9 +57,10 @@ function createApp({
   let requestCount = 0;
 
   app.disable('x-powered-by');
-  // Only believe X-Forwarded-For when the direct peer is a listed proxy (never a bare hop count,
-  // which would trust the header from any caller that can reach the app).
-  app.set('trust proxy', trustedProxies.length > 0 ? trustedProxies : false);
+  // Identity is the TCP peer address only. Forwarded headers (X-Forwarded-For, X-Real-IP, Forwarded)
+  // are never read, so a client cannot spoof its address. Per-client limiting happens in nginx, which
+  // sees each client's real socket address; behind it, the peer here is the frontend pod.
+  app.set('trust proxy', false);
 
   // ---- request logging + common headers -------------------------------------
   app.use((req, res, next) => {
@@ -82,7 +80,7 @@ function createApp({
         path: req.path,
         status: res.statusCode,
         ms: Number((process.hrtime.bigint() - began) / 1000n) / 1000,
-        ip: req.ip,
+        peer: req.socket.remoteAddress,
       });
     });
     next();
@@ -97,7 +95,7 @@ function createApp({
   });
 
   // ---- API ---------------------------------------------------------------------
-  const apiLimiter = createRateLimiter({ max: rateLimit.max ?? 600, windowMs: rateLimit.windowMs });
+  const apiLimiter = createRateLimiter({ max: rateLimit.max ?? 6000, windowMs: rateLimit.windowMs });
   const writeLimiter = createRateLimiter({ max: rateLimit.writeMax ?? 60, windowMs: rateLimit.windowMs });
   app.use('/api', apiLimiter);
   app.use(express.json({ limit: '10kb' }));

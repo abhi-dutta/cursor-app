@@ -59,12 +59,12 @@ Full stack in containers, same wiring and hardening as the cluster: `docker comp
 |---|---|
 | Containers | Non-root, read-only root FS (nginx gets tmpfs for `/tmp` and `/etc/nginx/conf.d`), all capabilities dropped, no privilege escalation, `npm ci --ignore-scripts`, V8 heap capped below the pod memory limit, OCI labels, health checks |
 | Kubernetes | Dedicated ServiceAccounts with no API token mounted, NetworkPolicies (backend reachable only from the frontend), zone + node topology spread, requests/limits sized for GKE Autopilot, startup/liveness/readiness probes, `maxUnavailable: 0` rolling updates, preStop drain + graceful SIGTERM, `restricted` Pod Security on the namespaces, PodDisruptionBudgets + HPA (2-6) in prod |
-| Edge | nginx: CSP and other security headers, request-rate limit (30 r/s per client, burst 60), body-size and timeout limits, gzip, spoof-proof `X-Forwarded-For`. `externalTrafficPolicy: Local` keeps the real client IP |
-| Backend | Per-IP rate limits (600/min general, 60/min writes), spec-gated writes, 10 KB body limit, structured JSON logs (no query strings), crash-on-uncaught-error, `TRUSTED_PROXIES` allow-list (X-Forwarded-For is honoured only from listed proxy peers, so client IPs can't be spoofed), no runtime internals in `/api/version` |
+| Edge | nginx: CSP and other security headers, request-rate limit (30 r/s per client, burst 60), body-size and timeout limits, gzip, strips client-supplied forwarding headers. `externalTrafficPolicy: Local` keeps the real client IP for nginx's per-client limit |
+| Backend | Per-peer rate-limit backstop (6000/min general, 60/min writes; per-client limiting is nginx's job), spec-gated writes, 10 KB body limit, structured JSON logs (no query strings), crash-on-uncaught-error, never reads forwarded-IP headers (identity = TCP peer, so nothing to spoof), no runtime internals in `/api/version` |
 | Supply chain | Secret scan + dependency scan in the pipeline, lockfile-pinned installs, no `latest` tag deployed |
 
 Tunables (env on the backend, via `backend-config` in `k8s/base/kustomization.yaml`): `APP_ENVIRONMENT`,
-`TRUSTED_PROXIES`, `RATE_LIMIT_PER_MIN`, `WRITE_RATE_LIMIT_PER_MIN`, `PORT`, `SPEC_PATH`, `SPEC_WATCH`.
+`RATE_LIMIT_PER_MIN`, `WRITE_RATE_LIMIT_PER_MIN`, `PORT`, `SPEC_PATH`, `SPEC_WATCH`.
 
 ## Build the images by hand
 

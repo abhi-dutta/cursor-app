@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * Minimal fixed-window, per-key rate limiter (no dependencies).
- * In-memory => limits are per pod. That is enough to blunt abuse of a demo app;
- * use the load balancer / Cloud Armor for global limits.
+ * Minimal fixed-window rate limiter keyed on the TCP peer address (no dependencies).
+ * Forwarded headers are deliberately ignored (they are client-controlled). Behind nginx the peer
+ * is the frontend pod, so this is a coarse per-peer backstop; fine-grained per-client limiting is
+ * done by nginx at the edge. In-memory => limits are per pod.
  */
 function createRateLimiter({ windowMs = 60_000, max = 600, maxKeys = 10_000, now = Date.now } = {}) {
   const buckets = new Map();
@@ -16,7 +17,7 @@ function createRateLimiter({ windowMs = 60_000, max = 600, maxKeys = 10_000, now
 
   function middleware(req, res, next) {
     const t = now();
-    const key = req.ip || 'unknown';
+    const key = req.socket.remoteAddress || 'unknown';
     let bucket = buckets.get(key);
     if (!bucket || bucket.resetAt <= t) {
       if (buckets.size >= maxKeys) buckets.clear(); // bound memory under a flood of distinct keys

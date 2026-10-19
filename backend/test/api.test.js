@@ -11,7 +11,7 @@ const { ItemStore } = require('../src/store');
  * Starts the app on an ephemeral port.
  * `allowEdit` overrides catalog.allowEdit from the shipped spec (default: true so CRUD can be tested).
  */
-async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, trustedProxies } = {}) {
+async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit } = {}) {
   const real = new SpecProvider();
   const { spec, hash } = real.get();
   const specProvider = { get: () => ({ hash, spec: { ...spec, catalog: { ...spec.catalog, allowEdit } } }) };
@@ -22,7 +22,6 @@ async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit,
     state,
     frontendDir,
     rateLimit,
-    trustedProxies,
     log: () => {},
     buildInfo: { service: 'backend', version: 'test', commit: 'abc123', environment: 'test', pod: 'test-pod' },
   });
@@ -168,39 +167,38 @@ test('write rate limit is stricter than the general limit', async () => {
   }, { rateLimit: { max: 100, writeMax: 2, windowMs: 60_000 } });
 });
 
-test('X-Forwarded-For is honoured only when the direct peer is a trusted proxy', async () => {
-  const limit = { max: 1, windowMs: 60_000 };
-  const hit = (base, ip) => fetch(`${base}/api/health`, { headers: { 'x-forwarded-for': ip } }).then((r) => r.status);
-
-  // Peer (127.0.0.1) is trusted: forwarded IPs get separate budgets.
+test('forwarded-IP headers are ignored: a spoofed address can neither dodge nor split the limit', async () => {
   await withServer(async (base) => {
-    assert.equal(await hit(base, '203.0.113.1'), 200);
-    assert.equal(await hit(base, '203.0.113.1'), 429);
-    assert.equal(await hit(base, '203.0.113.2'), 200);
-  }, { rateLimit: limit, trustedProxies: ['127.0.0.1'] });
-
-  // Named range works too.
-  await withServer(async (base) => {
-    assert.equal(await hit(base, '203.0.113.1'), 200);
-    assert.equal(await hit(base, '203.0.113.2'), 200);
-  }, { rateLimit: limit, trustedProxies: ['loopback'] });
+    const hit = (headers) => fetch(`${base}/api/health`, { headers }).then((r) => r.status);
+    assert.equal(await hit({ 'x-forwarded-for': '203.0.113.1' }), 200);
+    // Different spoofed identities all share the real peer's budget.
+    assert.equal(await hit({ 'x-forwarded-for': '203.0.113.2' }), 429);
+    assert.equal(await hit({ 'x-real-ip': '203.0.113.3' }), 429);
+    assert.equal(await hit({ forwarded: 'for=203.0.113.4' }), 429);
+    assert.equal(await hit({}), 429);
+  }, { rateLimit: { max: 1, windowMs: 60_000 } });
 });
 
-test('a spoofed X-Forwarded-For cannot dodge the limit from an untrusted peer', async () => {
-  const limit = { max: 1, windowMs: 60_000 };
-  const hit = (base, ip) => fetch(`${base}/api/health`, { headers: { 'x-forwarded-for': ip } }).then((r) => r.status);
-  const untrusted = [
-    { rateLimit: limit },                                              // nobody trusted (default)
-    { rateLimit: limit, trustedProxies: [] },
-    { rateLimit: limit, trustedProxies: ['10.0.0.0/8'] },              // peer 127.0.0.1 not in the list
-    { rateLimit: limit, trustedProxies: ['198.51.100.7'] },
-  ];
-  for (const options of untrusted) {
-    await withServer(async (base) => {
-      assert.equal(await hit(base, '203.0.113.1'), 200);
-      assert.equal(await hit(base, '203.0.113.2'), 429); // header ignored: same client
-      assert.equal(await hit(base, '203.0.113.3'), 429);
-    }, options);
+test('request logs record the socket peer, not a client-supplied header', async () => {
+  const entries = [];
+  const specProvider = new SpecProvider();
+  const app = createApp({
+    specProvider,
+    store: new ItemStore([]),
+    log: (e) => entries.push(e),
+    buildInfo: { pod: 'p' },
+  });
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, '127.0.0.1', () => resolve(s));
+  });
+  try {
+    await fetch(`http://127.0.0.1:${server.address().port}/api/health`, { headers: { 'x-forwarded-for': '203.0.113.9' } });
+    await new Promise((r) => setTimeout(r, 20));
+    const entry = entries.find((e) => e.msg === 'request');
+    assert.match(entry.peer, /127\.0\.0\.1$/);
+    assert.ok(!JSON.stringify(entry).includes('203.0.113.9'));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 
