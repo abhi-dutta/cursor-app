@@ -13,8 +13,10 @@ configMapGenerator:
   - name: backend-config
     literals:
       - APP_ENVIRONMENT=base
-      # One proxy hop (nginx) sits in front of the backend; trust its X-Forwarded-For for client IPs.
-      - TRUST_PROXY=1
+      # X-Forwarded-For is trusted ONLY from these peers (the nginx frontend pods, which sit in the
+      # cluster's private pod range; the NetworkPolicy also blocks every other source). If your pod
+      # CIDR is not RFC1918 (e.g. GKE with a custom/class-E range), replace with that CIDR.
+      - TRUSTED_PROXIES=uniquelocal
       - RATE_LIMIT_PER_MIN=600
       - WRITE_RATE_LIMIT_PER_MIN=60
 

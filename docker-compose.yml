@@ -10,7 +10,7 @@ services:
         GIT_SHA: ${GIT_SHA:-local}
     environment:
       APP_ENVIRONMENT: compose
-      TRUST_PROXY: "1"
+      TRUSTED_PROXIES: uniquelocal
     expose:
       - "3000"
     read_only: true

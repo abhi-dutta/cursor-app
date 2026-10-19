@@ -11,7 +11,7 @@ const { ItemStore } = require('../src/store');
  * Starts the app on an ephemeral port.
  * `allowEdit` overrides catalog.allowEdit from the shipped spec (default: true so CRUD can be tested).
  */
-async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, trustProxy } = {}) {
+async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, trustedProxies } = {}) {
   const real = new SpecProvider();
   const { spec, hash } = real.get();
   const specProvider = { get: () => ({ hash, spec: { ...spec, catalog: { ...spec.catalog, allowEdit } } }) };
@@ -22,7 +22,7 @@ async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit,
     state,
     frontendDir,
     rateLimit,
-    trustProxy,
+    trustedProxies,
     log: () => {},
     buildInfo: { service: 'backend', version: 'test', commit: 'abc123', environment: 'test', pod: 'test-pod' },
   });
@@ -168,21 +168,40 @@ test('write rate limit is stricter than the general limit', async () => {
   }, { rateLimit: { max: 100, writeMax: 2, windowMs: 60_000 } });
 });
 
-test('client IP comes from X-Forwarded-For only when a proxy is trusted', async () => {
-  // Limit is per IP: two different forwarded IPs get separate budgets when the proxy is trusted.
-  await withServer(async (base) => {
-    const hit = (ip) => fetch(`${base}/api/health`, { headers: { 'x-forwarded-for': ip } }).then((r) => r.status);
-    assert.equal(await hit('203.0.113.1'), 200);
-    assert.equal(await hit('203.0.113.1'), 429);
-    assert.equal(await hit('203.0.113.2'), 200);
-  }, { rateLimit: { max: 1, windowMs: 60_000 }, trustProxy: 1 });
+test('X-Forwarded-For is honoured only when the direct peer is a trusted proxy', async () => {
+  const limit = { max: 1, windowMs: 60_000 };
+  const hit = (base, ip) => fetch(`${base}/api/health`, { headers: { 'x-forwarded-for': ip } }).then((r) => r.status);
 
-  // Untrusted: the header is ignored, so spoofing it can't dodge the limit.
+  // Peer (127.0.0.1) is trusted: forwarded IPs get separate budgets.
   await withServer(async (base) => {
-    const hit = (ip) => fetch(`${base}/api/health`, { headers: { 'x-forwarded-for': ip } }).then((r) => r.status);
-    assert.equal(await hit('203.0.113.1'), 200);
-    assert.equal(await hit('203.0.113.2'), 429);
-  }, { rateLimit: { max: 1, windowMs: 60_000 }, trustProxy: 0 });
+    assert.equal(await hit(base, '203.0.113.1'), 200);
+    assert.equal(await hit(base, '203.0.113.1'), 429);
+    assert.equal(await hit(base, '203.0.113.2'), 200);
+  }, { rateLimit: limit, trustedProxies: ['127.0.0.1'] });
+
+  // Named range works too.
+  await withServer(async (base) => {
+    assert.equal(await hit(base, '203.0.113.1'), 200);
+    assert.equal(await hit(base, '203.0.113.2'), 200);
+  }, { rateLimit: limit, trustedProxies: ['loopback'] });
+});
+
+test('a spoofed X-Forwarded-For cannot dodge the limit from an untrusted peer', async () => {
+  const limit = { max: 1, windowMs: 60_000 };
+  const hit = (base, ip) => fetch(`${base}/api/health`, { headers: { 'x-forwarded-for': ip } }).then((r) => r.status);
+  const untrusted = [
+    { rateLimit: limit },                                              // nobody trusted (default)
+    { rateLimit: limit, trustedProxies: [] },
+    { rateLimit: limit, trustedProxies: ['10.0.0.0/8'] },              // peer 127.0.0.1 not in the list
+    { rateLimit: limit, trustedProxies: ['198.51.100.7'] },
+  ];
+  for (const options of untrusted) {
+    await withServer(async (base) => {
+      assert.equal(await hit(base, '203.0.113.1'), 200);
+      assert.equal(await hit(base, '203.0.113.2'), 429); // header ignored: same client
+      assert.equal(await hit(base, '203.0.113.3'), 429);
+    }, options);
+  }
 });
 
 test('static frontend: serves assets, CSP and SPA fallback when the directory exists', async () => {
