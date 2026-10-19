@@ -1,0 +1,25 @@
+# Used ONLY by the Harness pipeline (service "spec_demo" -> Kustomize `patchesPaths`).
+# Harness resolves the expressions below to the exact images the CI stage just pushed
+# (primary artifact = backend, sidecar artifact "frontend"), so what is built is what is deployed.
+# Do not reference this file from a kustomization.yaml - it is not valid for plain `kubectl apply`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  template:
+    spec:
+      containers:
+        - name: backend
+          image: <+artifacts.primary.image>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  template:
+    spec:
+      containers:
+        - name: frontend
+          image: <+artifacts.sidecars.frontend.image>

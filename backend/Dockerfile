@@ -5,7 +5,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app/backend
 COPY backend/package.json backend/package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 FROM node:22-alpine
 ARG APP_VERSION=dev
@@ -17,13 +17,16 @@ LABEL org.opencontainers.image.title="spec-demo-backend" \
       org.opencontainers.image.revision="${GIT_SHA}" \
       org.opencontainers.image.created="${BUILD_TIME}"
 
+# Heap cap sits below the pod memory limit so V8 GCs hard instead of the kernel OOM-killing the pod.
 ENV NODE_ENV=production \
+    NODE_OPTIONS=--max-old-space-size=128 \
     PORT=3000 \
     APP_VERSION=${APP_VERSION} \
     GIT_SHA=${GIT_SHA} \
     BUILD_TIME=${BUILD_TIME}
 
 WORKDIR /app/backend
+# App files stay root-owned (read-only for the runtime user); the process only needs to read them.
 COPY --from=deps /app/backend/node_modules ./node_modules
 COPY backend/package.json ./
 COPY backend/src ./src

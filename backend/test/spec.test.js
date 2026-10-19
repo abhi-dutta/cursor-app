@@ -60,3 +60,50 @@ sections:
 test('non-mapping sections are rejected cleanly', () => {
   assert.throws(() => parseSpec('version: 1\napp: { name: X }\ntheme: null\n'), SpecError);
 });
+
+test('SpecProvider (watch) picks up edits, keeps the last good spec on a bad edit, and recovers', () => {
+  const os = require('node:os');
+  const { SpecProvider } = require('../src/spec');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-test-'));
+  const file = path.join(dir, 'app.spec.yaml');
+  try {
+    fs.writeFileSync(file, 'version: 1\napp:\n  name: First\n');
+    const provider = new SpecProvider(file, { watch: true });
+    assert.equal(provider.get().spec.app.name, 'First');
+
+    fs.writeFileSync(file, 'version: 1\napp:\n  name: Second\n');
+    assert.equal(provider.get().spec.app.name, 'Second');
+
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      fs.writeFileSync(file, 'version: 99\n');
+      assert.equal(provider.get().spec.app.name, 'Second'); // last good
+      assert.ok(provider.lastError);
+    } finally {
+      console.error = originalError;
+    }
+
+    fs.writeFileSync(file, 'version: 1\napp:\n  name: Second\n');
+    assert.equal(provider.get().spec.app.name, 'Second');
+    assert.equal(provider.lastError, null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SpecProvider (no watch) never re-reads the file', () => {
+  const os = require('node:os');
+  const { SpecProvider } = require('../src/spec');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spec-test-'));
+  const file = path.join(dir, 'app.spec.yaml');
+  try {
+    fs.writeFileSync(file, 'version: 1\napp:\n  name: First\n');
+    const provider = new SpecProvider(file);
+    fs.writeFileSync(file, 'version: 1\napp:\n  name: Changed\n');
+    assert.equal(provider.get().spec.app.name, 'First');
+    assert.throws(() => new SpecProvider(path.join(dir, 'missing.yaml')));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

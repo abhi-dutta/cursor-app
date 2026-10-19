@@ -248,7 +248,12 @@ function updateLiveParts() {
   if (badge) badge.replaceChildren(...badgeParts());
 }
 
+let polling = false;
+
 async function poll() {
+  // Skip background tabs (saves API calls) and overlapping runs (slow network).
+  if (document.hidden || polling) return;
+  polling = true;
   try {
     const { hash, spec } = await api('/api/spec');
     await refreshLive();
@@ -262,9 +267,12 @@ async function poll() {
       updateLiveParts();
     }
   } catch (err) {
+    if (err.status === 429) return; // rate limited: just try again on the next tick
     state.backendUp = false;
     if (state.spec) updateLiveParts();
     else root.replaceChildren(h('p', { class: 'fatal', text: `Cannot reach the backend (${err.message}). Retrying…` }));
+  } finally {
+    polling = false;
   }
 }
 
@@ -273,6 +281,7 @@ async function start() {
   if (state.frontend && typeof state.frontend.version !== 'string') state.frontend = null;
   await poll();
   setInterval(poll, POLL_MS);
+  document.addEventListener('visibilitychange', poll); // refresh immediately when the tab comes back
 }
 
 start();

@@ -2,25 +2,34 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  - serviceaccount.yaml
   - backend-deployment.yaml
   - backend-service.yaml
   - frontend-deployment.yaml
   - frontend-service.yaml
+  - networkpolicy.yaml
 
 configMapGenerator:
   - name: backend-config
     literals:
       - APP_ENVIRONMENT=base
+      # Per-peer backstop (the peer is the frontend pod, so it covers all users behind it);
+      # per-client limits are enforced by nginx.
+      - RATE_LIMIT_PER_MIN=6000
+      - WRITE_RATE_LIMIT_PER_MIN=60
 
-# Point these at your Artifact Registry repo. Harness CD can override the tag per
-# deployment, or from the CLI:  kustomize edit set image spec-demo-backend=<repo>/backend:<tag>
+# Images are placed by the pipeline: Harness patches the containers with the exact artifact it
+# just built (see k8s/harness/patch-images.yaml). For manual deploys use:
+#   kustomize edit set image spec-demo-backend=docker.io/dutabhis/spec-demo-backend:<tag> \
+#                            spec-demo-frontend=docker.io/dutabhis/spec-demo-frontend:<tag>
+# The tag below is deliberately not a real one, so nothing deploys an unintended image.
 images:
   - name: spec-demo-backend
-    newName: REGION-docker.pkg.dev/PROJECT_ID/spec-demo/backend
-    newTag: latest
+    newName: docker.io/dutabhis/spec-demo-backend
+    newTag: set-by-pipeline
   - name: spec-demo-frontend
-    newName: REGION-docker.pkg.dev/PROJECT_ID/spec-demo/frontend
-    newTag: latest
+    newName: docker.io/dutabhis/spec-demo-frontend
+    newTag: set-by-pipeline
 
 labels:
   - pairs:

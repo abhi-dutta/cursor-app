@@ -8,6 +8,7 @@ metadata:
 spec:
   replicas: 2
   revisionHistoryLimit: 5
+  progressDeadlineSeconds: 300
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -22,6 +23,9 @@ spec:
         app.kubernetes.io/name: backend
         app.kubernetes.io/part-of: spec-demo
     spec:
+      serviceAccountName: backend
+      automountServiceAccountToken: false
+      enableServiceLinks: false
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
@@ -29,9 +33,22 @@ spec:
         runAsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: backend
       containers:
         - name: backend
-          # Replaced by kustomize `images:` (or by Harness at deploy time)
+          # Tag is set by the pipeline (Harness patch) or `kustomize edit set image`
           image: spec-demo-backend
           ports:
             - name: http
@@ -42,10 +59,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 96Mi
             limits:
-              cpu: 250m
-              memory: 128Mi
+              cpu: 500m
+              memory: 192Mi
           startupProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 2
@@ -54,10 +71,12 @@ spec:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 10
             timeoutSeconds: 2
+            failureThreshold: 3
           readinessProbe:
             httpGet: { path: /readyz, port: http }
             periodSeconds: 5
             timeoutSeconds: 2
+            failureThreshold: 2
           lifecycle:
             preStop:
               exec:

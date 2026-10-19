@@ -2,18 +2,27 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { createApp } = require('../src/app');
 const { SpecProvider } = require('../src/spec');
 const { ItemStore } = require('../src/store');
 
-async function withServer(fn, { state, frontendDir } = {}) {
-  const specProvider = new SpecProvider();
-  const store = new ItemStore(specProvider.get().spec.catalog.items);
+/**
+ * Starts the app on an ephemeral port.
+ * `allowEdit` overrides catalog.allowEdit from the shipped spec (default: true so CRUD can be tested).
+ */
+async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit } = {}) {
+  const real = new SpecProvider();
+  const { spec, hash } = real.get();
+  const specProvider = { get: () => ({ hash, spec: { ...spec, catalog: { ...spec.catalog, allowEdit } } }) };
+  const store = new ItemStore(spec.catalog.items);
   const app = createApp({
     specProvider,
     store,
     state,
     frontendDir,
+    rateLimit,
+    log: () => {},
     buildInfo: { service: 'backend', version: 'test', commit: 'abc123', environment: 'test', pod: 'test-pod' },
   });
   const server = await new Promise((resolve) => {
@@ -27,8 +36,8 @@ async function withServer(fn, { state, frontendDir } = {}) {
   }
 }
 
-const json = (body) => ({
-  method: 'POST',
+const json = (body, method = 'POST') => ({
+  method,
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify(body),
 });
@@ -47,11 +56,21 @@ test('readiness fails while draining', async () => {
   }, { state: { ready: false } });
 });
 
-test('GET /api/version returns build info', async () => {
+test('GET /api/version returns build info and no runtime internals', async () => {
   await withServer(async (base) => {
     const body = await (await fetch(`${base}/api/version`)).json();
     assert.equal(body.version, 'test');
     assert.equal(body.pod, 'test-pod');
+    assert.equal(body.node, undefined);
+  });
+});
+
+test('responses carry hardening headers and API responses are not cached', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/version`);
+    assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.equal(res.headers.get('x-powered-by'), null);
   });
 });
 
@@ -73,7 +92,7 @@ test('GET /api/stats counts API requests and items', async () => {
   });
 });
 
-test('items CRUD lifecycle', async () => {
+test('items CRUD lifecycle (writes enabled)', async () => {
   await withServer(async (base) => {
     const list = await (await fetch(`${base}/api/items`)).json();
     assert.equal(list.length, 4);
@@ -87,12 +106,23 @@ test('items CRUD lifecycle', async () => {
     const fetched = await (await fetch(`${base}/api/items/${item.id}`)).json();
     assert.equal(fetched.price, 12.5);
 
-    const updated = await fetch(`${base}/api/items/${item.id}`, { ...json({ price: 20 }), method: 'PUT' });
+    const updated = await fetch(`${base}/api/items/${item.id}`, json({ price: 20 }, 'PUT'));
     assert.equal((await updated.json()).price, 20);
 
     assert.equal((await fetch(`${base}/api/items/${item.id}`, { method: 'DELETE' })).status, 204);
     assert.equal((await fetch(`${base}/api/items/${item.id}`)).status, 404);
   });
+});
+
+test('writes are rejected with 403 unless the spec enables them', async () => {
+  await withServer(async (base) => {
+    assert.equal((await fetch(`${base}/api/items`)).status, 200); // reads still work
+    assert.equal((await fetch(`${base}/api/items`, json({ name: 'x', price: 1 }))).status, 403);
+    assert.equal((await fetch(`${base}/api/items/1`, json({ price: 1 }, 'PUT'))).status, 403);
+    assert.equal((await fetch(`${base}/api/items/1`, { method: 'DELETE' })).status, 403);
+    const list = await (await fetch(`${base}/api/items`)).json();
+    assert.equal(list.length, 4);
+  }, { allowEdit: false });
 });
 
 test('item validation and error handling', async () => {
@@ -111,14 +141,73 @@ test('item validation and error handling', async () => {
     assert.equal((await fetch(`${base}/api/items/abc`)).status, 400);
     assert.equal((await fetch(`${base}/api/items/9999`)).status, 404);
     assert.equal((await fetch(`${base}/api/unknown`)).status, 404);
+
+    const huge = await fetch(`${base}/api/items`, json({ name: 'x'.repeat(20_000), price: 1 }));
+    assert.equal(huge.status, 413);
   });
 });
 
-test('static frontend: serves assets and SPA fallback when the directory exists', async () => {
-  const dir = require('node:path').resolve(__dirname, '../../frontend/public');
+test('rate limiting returns 429 with Retry-After, and probes are exempt', async () => {
+  await withServer(async (base) => {
+    for (let i = 0; i < 3; i += 1) assert.equal((await fetch(`${base}/api/health`)).status, 200);
+    const limited = await fetch(`${base}/api/health`);
+    assert.equal(limited.status, 429);
+    assert.ok(Number(limited.headers.get('retry-after')) >= 1);
+    assert.equal((await fetch(`${base}/healthz`)).status, 200);
+    assert.equal((await fetch(`${base}/readyz`)).status, 200);
+  }, { rateLimit: { max: 3, windowMs: 60_000 } });
+});
+
+test('write rate limit is stricter than the general limit', async () => {
+  await withServer(async (base) => {
+    assert.equal((await fetch(`${base}/api/items`, json({ name: 'a', price: 1 }))).status, 201);
+    assert.equal((await fetch(`${base}/api/items`, json({ name: 'b', price: 1 }))).status, 201);
+    assert.equal((await fetch(`${base}/api/items`, json({ name: 'c', price: 1 }))).status, 429);
+    assert.equal((await fetch(`${base}/api/items`)).status, 200);
+  }, { rateLimit: { max: 100, writeMax: 2, windowMs: 60_000 } });
+});
+
+test('forwarded-IP headers are ignored: a spoofed address can neither dodge nor split the limit', async () => {
+  await withServer(async (base) => {
+    const hit = (headers) => fetch(`${base}/api/health`, { headers }).then((r) => r.status);
+    assert.equal(await hit({ 'x-forwarded-for': '203.0.113.1' }), 200);
+    // Different spoofed identities all share the real peer's budget.
+    assert.equal(await hit({ 'x-forwarded-for': '203.0.113.2' }), 429);
+    assert.equal(await hit({ 'x-real-ip': '203.0.113.3' }), 429);
+    assert.equal(await hit({ forwarded: 'for=203.0.113.4' }), 429);
+    assert.equal(await hit({}), 429);
+  }, { rateLimit: { max: 1, windowMs: 60_000 } });
+});
+
+test('request logs record the socket peer, not a client-supplied header', async () => {
+  const entries = [];
+  const specProvider = new SpecProvider();
+  const app = createApp({
+    specProvider,
+    store: new ItemStore([]),
+    log: (e) => entries.push(e),
+    buildInfo: { pod: 'p' },
+  });
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, '127.0.0.1', () => resolve(s));
+  });
+  try {
+    await fetch(`http://127.0.0.1:${server.address().port}/api/health`, { headers: { 'x-forwarded-for': '203.0.113.9' } });
+    await new Promise((r) => setTimeout(r, 20));
+    const entry = entries.find((e) => e.msg === 'request');
+    assert.match(entry.peer, /127\.0\.0\.1$/);
+    assert.ok(!JSON.stringify(entry).includes('203.0.113.9'));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('static frontend: serves assets, CSP and SPA fallback when the directory exists', async () => {
+  const dir = path.resolve(__dirname, '../../frontend/public');
   await withServer(async (base) => {
     const index = await fetch(`${base}/`);
     assert.equal(index.status, 200);
+    assert.match(index.headers.get('content-security-policy'), /default-src 'self'/);
     assert.match(await index.text(), /<div id="app"/);
     assert.equal((await fetch(`${base}/app.js`)).status, 200);
     assert.equal((await fetch(`${base}/some/client/route`)).status, 200);

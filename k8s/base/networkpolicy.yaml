@@ -1,0 +1,38 @@
+# Only the frontend pods may talk to the backend; the frontend accepts traffic from the
+# load balancer. Enforced on clusters with NetworkPolicy support (GKE Dataplane V2 /
+# Autopilot, or Calico); harmlessly ignored elsewhere.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-frontend-only
+  labels:
+    app.kubernetes.io/part-of: spec-demo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-http
+  labels:
+    app.kubernetes.io/part-of: spec-demo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
