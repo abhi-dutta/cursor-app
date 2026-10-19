@@ -1,0 +1,122 @@
+/* All colours/fonts/radius come from the spec via CSS variables set in app.js */
+:root {
+  --primary: #0092e4;
+  --accent: #ff7a1a;
+  --bg: #f4f7fb;
+  --surface: #ffffff;
+  --text: #10243a;
+  --radius: 14px;
+  --muted: color-mix(in srgb, var(--text) 62%, var(--bg));
+  --border: color-mix(in srgb, var(--text) 12%, var(--bg));
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+[data-font="serif"] { --font: Georgia, "Times New Roman", serif; }
+[data-font="mono"] { --font: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+[data-font="rounded"] { --font: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.55;
+}
+
+.container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.loading, .fatal { text-align: center; padding: 20vh 24px; color: var(--muted); }
+
+/* ---- header ---- */
+.site-header { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+.site-header .container { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+.brand .logo { font-size: 1.5rem; }
+.brand .tagline { font-weight: 400; font-size: 0.8rem; color: var(--muted); display: block; line-height: 1.1; }
+.nav { display: flex; gap: 18px; flex-wrap: wrap; }
+.nav a { color: var(--muted); text-decoration: none; font-size: 0.92rem; }
+.nav a:hover { color: var(--primary); }
+
+/* ---- banner ---- */
+.banner { padding: 10px 24px; text-align: center; font-size: 0.92rem; font-weight: 500; color: #fff; }
+.banner.info { background: var(--primary); }
+.banner.success { background: #1b9a5b; }
+.banner.warning { background: #d97706; }
+
+/* ---- hero ---- */
+.hero { padding: 72px 0 56px; }
+.hero.centered .container { text-align: center; max-width: 780px; }
+.hero.split .container { display: grid; grid-template-columns: 1.3fr 1fr; align-items: center; gap: 40px; }
+.hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.1; margin: 0 0 16px; }
+.hero p { font-size: 1.15rem; color: var(--muted); margin: 0 0 28px; }
+.hero .emoji { font-size: 4rem; margin-bottom: 12px; }
+.hero.split .art {
+  font-size: 7rem; text-align: center; padding: 36px; border-radius: calc(var(--radius) * 1.6);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 25%, var(--surface)), color-mix(in srgb, var(--accent) 25%, var(--surface)));
+}
+.btn {
+  display: inline-block; border: 0; cursor: pointer; font: inherit; font-weight: 600; text-decoration: none;
+  background: var(--primary); color: #fff; padding: 12px 24px; border-radius: var(--radius);
+  transition: transform 0.1s, filter 0.2s;
+}
+.btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.btn.small { padding: 6px 12px; font-size: 0.85rem; }
+.btn.danger { background: #d92d20; }
+
+/* ---- sections ---- */
+.section { padding: 40px 0; scroll-margin-top: 72px; }
+.section h2 { margin: 0 0 6px; font-size: 1.7rem; }
+.section .subtitle { margin: 0 0 24px; color: var(--muted); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.grid { display: grid; gap: 18px; }
+.grid.cols-1 { grid-template-columns: 1fr; }
+.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+.feature .icon { font-size: 2rem; margin-bottom: 8px; }
+.feature h3 { margin: 0 0 4px; }
+.feature p { margin: 0; color: var(--muted); }
+
+.stat .label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.stat .value { font-size: 1.5rem; font-weight: 700; color: var(--primary); word-break: break-all; }
+
+.catalog.grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.item .emoji { font-size: 2.4rem; }
+.item h3 { margin: 6px 0 4px; font-size: 1.05rem; }
+.item p { margin: 0 0 10px; color: var(--muted); font-size: 0.92rem; }
+.item .price { font-weight: 700; color: var(--accent); font-size: 1.1rem; }
+.tag { background: color-mix(in srgb, var(--accent) 18%, var(--surface)); color: var(--accent); font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; margin-left: 6px; }
+.catalog.list { display: flex; flex-direction: column; gap: 10px; }
+.catalog.list .item { display: flex; align-items: center; gap: 16px; padding: 14px 20px; }
+.catalog.list .item .body { flex: 1; }
+.catalog.list .item p { margin: 0; }
+.catalog.list .item h3 { margin: 0; }
+.catalog.list .item .emoji { font-size: 2rem; }
+.item .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.add-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+.add-form input { font: inherit; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.add-form .error { color: #d92d20; width: 100%; margin: 0; font-size: 0.9rem; }
+
+.empty { color: var(--muted); font-style: italic; }
+.text-body { max-width: 720px; font-size: 1.05rem; }
+
+/* ---- footer ---- */
+.site-footer { margin-top: 40px; padding: 28px 0 40px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.9rem; }
+.site-footer .container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.build-badge { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; display: flex; gap: 6px; flex-wrap: wrap; }
+.build-badge span { background: var(--surface); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; }
+.build-badge .down { color: #d92d20; border-color: #d92d20; }
+
+@media (max-width: 760px) {
+  .hero.split .container { grid-template-columns: 1fr; }
+  .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+  .nav { display: none; }
+}

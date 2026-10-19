@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: spec-demo
+spec:
+  # On GKE this provisions an external passthrough Network Load Balancer with a public IP:
+  #   kubectl -n <ns> get svc frontend
+  # Prefer an Ingress / Gateway instead? See k8s/optional/ingress.yaml (and switch this to ClusterIP).
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

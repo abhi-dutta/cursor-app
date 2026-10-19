@@ -1,0 +1,35 @@
+---
+description: How to implement changes to this app from a spec. Apply for any feature, UI, content or theme change request.
+alwaysApply: true
+---
+
+# Spec-driven development in this repo
+
+The UI is rendered from `spec/app.spec.yaml`. The backend validates and serves it at
+`GET /api/spec`; the frontend (`frontend/public/app.js`) renders whatever it receives.
+
+## When asked to change the app, pick the smallest layer that works
+
+1. **Content / look / layout / section order** -> edit `spec/app.spec.yaml` only.
+   Do not touch JS or CSS for something the spec can already express.
+2. **A new kind of block or option** (e.g. a new section type or theme option):
+   - add the renderer in `frontend/public/app.js` (`SECTION_RENDERERS`) and styles in `styles.css`
+   - allow + validate it in `backend/src/spec.js` (`SECTION_TYPES` / `validateSpec`)
+   - document it in `spec/README.md`
+   - add or extend a test in `backend/test/spec.test.js`
+   - then use it in the spec
+3. **A new API capability**: add the route in `backend/src/app.js`, tests in `backend/test/api.test.js`,
+   and list it in the README API table. Keep route handlers thin.
+
+## Rules
+
+- Keep the three spec files valid: run `npm run validate-spec` and `npm test` before finishing.
+- Keep `spec/examples/*.spec.yaml` valid and complete (they include `catalog.items`).
+- In YAML flow mappings (`{ a: b }`) quote any value containing a comma or colon.
+- The frontend must never use `innerHTML` for spec/API data; use the `h()` helper / `textContent`.
+- Do not add npm dependencies without a strong reason; the frontend has no build step by design.
+- Bump nothing by hand for versions: image tags/`APP_VERSION` come from the pipeline.
+- Backend env (`APP_VERSION`, `GIT_SHA`, `APP_ENVIRONMENT`) and k8s manifests live in `k8s/`; only edit
+  them when the change really is about deployment.
+- For a visible demo change, make the change obvious (banner text / hero title / colours) so the
+  difference between releases is clear on screen.

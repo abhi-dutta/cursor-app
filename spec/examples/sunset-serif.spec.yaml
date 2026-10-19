@@ -1,0 +1,65 @@
+# Example: warm editorial look with a warning banner and a text section.
+# Apply with:  npm run spec:use sunset-serif
+version: 1
+
+app:
+  name: Harness Demo Store
+  tagline: A warmer take
+  logo: "🌅"
+
+theme:
+  mode: light
+  primaryColor: "#c2410c"
+  accentColor: "#0f766e"
+  background: "#fff7ed"
+  surface: "#ffffff"
+  textColor: "#3b1d0e"
+  font: serif
+  radius: 4
+
+banner:
+  enabled: true
+  tone: warning
+  text: "Flash sale: everything in the catalog is on offer this week."
+
+hero:
+  layout: centered
+  title: Software delivery, beautifully simple
+  subtitle: Pick a spec, push to Git, watch the pipeline do the work.
+  emoji: "🌅"
+  cta:
+    label: Shop the catalog
+    target: catalog
+
+sections:
+  - id: about
+    type: text
+    title: About this demo
+    body: This page is rendered from a YAML spec. Swap the spec, rebuild, redeploy - the whole story takes minutes.
+
+  - id: catalog
+    type: catalog
+    title: Catalog
+    layout: grid
+    showPrice: true
+
+  - id: features
+    type: features
+    title: How it works
+    columns: 2
+    items:
+      - { icon: "1️⃣", title: Edit the spec, description: One file describes the whole UI. }
+      - { icon: "2️⃣", title: Push to Git, description: The Harness pipeline is triggered. }
+
+footer:
+  text: "Harness build & deploy demo - sunset serif"
+
+# Seed data for GET /api/items. Set allowEdit to true to show add/delete
+# controls (data is in-memory and per-pod, so keep replicas at 1 if you do).
+catalog:
+  allowEdit: false
+  items:
+    - { id: 1, name: Pipeline Starter Kit, description: Opinionated CI/CD pipeline templates., price: 49, emoji: "🧰", tag: popular }
+    - { id: 2, name: Canary Deployer, description: Gradual rollouts with automatic verification., price: 99, emoji: "🐤", tag: new }
+    - { id: 3, name: Feature Flag Pack, description: Decouple deploy from release., price: 29, emoji: "🚩" }
+    - { id: 4, name: Cost Insight Lens, description: See what every deployment costs., price: 79, emoji: "🔍" }

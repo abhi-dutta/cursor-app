@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# Application spec  -  the single source of truth for what the UI looks like.
+#
+# Edit this file, then:
+#   * locally  : the browser live-updates within a few seconds (npm run dev)
+#   * pipeline : commit -> Harness CI builds a new backend image -> CD rolls it
+#                out to GKE -> open browser tabs pick up the change on their own
+#
+# Anything you leave out falls back to the defaults in backend/src/spec.js.
+# Full field reference: spec/README.md
+# ---------------------------------------------------------------------------
+version: 1
+
+app:
+  name: Harness Demo Store
+  tagline: Built, tested and shipped by a Harness pipeline
+  logo: "🚀"
+
+theme:
+  mode: light               # light | dark
+  primaryColor: "#0092e4"
+  accentColor: "#ff7a1a"
+  background: "#f4f7fb"
+  surface: "#ffffff"
+  textColor: "#10243a"
+  font: sans                # sans | serif | mono | rounded
+  radius: 14                # corner radius in px
+
+banner:
+  enabled: true
+  tone: info                # info | success | warning
+  text: "Version 1 of the spec is live. Change spec/app.spec.yaml to change this page."
+
+hero:
+  layout: centered          # centered | split
+  title: Ship changes from a spec in minutes
+  subtitle: This page is rendered entirely from a declarative spec served by a REST API and deployed to GKE.
+  emoji: "⚡"
+  cta:
+    label: Browse the catalog
+    target: catalog         # id of a section below
+
+# Rendered top to bottom. Types: features | catalog | stats | text
+sections:
+  - id: features
+    type: features
+    title: Why spec-driven?
+    subtitle: Every block on this page is data, not code.
+    columns: 3
+    items:
+      - icon: "📝"
+        title: Describe it
+        description: Write the change you want in the spec file.
+      - icon: "🔨"
+        title: Build it
+        description: Harness CI tests, builds and pushes the container images.
+      - icon: "🚢"
+        title: Deploy it
+        description: Harness CD rolls the new version out to your GKE cluster.
+
+  - id: stats
+    type: stats
+    title: Live from the backend
+    metrics: [version, pod, environment, uptime, requests, items]
+
+  - id: catalog
+    type: catalog
+    title: Catalog
+    subtitle: Served by GET /api/items
+    layout: grid            # grid | list
+    showPrice: true
+
+footer:
+  text: "Harness build & deploy demo"
+  showBuildInfo: true       # shows frontend/backend version and the serving pod
+
+# Seed data for GET /api/items. Set allowEdit to true to show add/delete
+# controls (data is in-memory and per-pod, so keep replicas at 1 if you do).
+catalog:
+  allowEdit: false
+  items:
+    - { id: 1, name: Pipeline Starter Kit, description: Opinionated CI/CD pipeline templates., price: 49, emoji: "🧰", tag: popular }
+    - { id: 2, name: Canary Deployer, description: Gradual rollouts with automatic verification., price: 99, emoji: "🐤", tag: new }
+    - { id: 3, name: Feature Flag Pack, description: Decouple deploy from release., price: 29, emoji: "🚩" }
+    - { id: 4, name: Cost Insight Lens, description: See what every deployment costs., price: 79, emoji: "🔍" }

@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: spec-demo-prod
+
+resources:
+  - namespace.yaml
+  - ../../base
+  - pdb.yaml
+  - hpa.yaml
+
+configMapGenerator:
+  - name: backend-config
+    behavior: merge
+    literals:
+      - APP_ENVIRONMENT=prod
+
+# The HPA owns the replica count in prod, so drop the fixed value from the base.
+patches:
+  - target: { kind: Deployment, name: backend }
+    patch: |-
+      - op: remove
+        path: /spec/replicas
+  - target: { kind: Deployment, name: frontend }
+    patch: |-
+      - op: remove
+        path: /spec/replicas

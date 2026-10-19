@@ -1,0 +1,22 @@
+# OPTIONAL: expose the app through a GKE external Application Load Balancer instead of
+# the default Service type LoadBalancer.
+#
+# To use it:
+#   1. change k8s/base/frontend-service.yaml to `type: ClusterIP`
+#   2. reserve a global static IP:  gcloud compute addresses create spec-demo-ip --global
+#   3. kubectl apply -n <namespace> -f k8s/optional/ingress.yaml
+#
+# For HTTPS add a ManagedCertificate + the `networking.gke.io/managed-certificates` annotation.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: spec-demo
+  annotations:
+    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.global-static-ip-name: spec-demo-ip
+spec:
+  defaultBackend:
+    service:
+      name: frontend
+      port:
+        number: 80

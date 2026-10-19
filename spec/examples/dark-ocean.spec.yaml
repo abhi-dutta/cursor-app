@@ -1,0 +1,66 @@
+# Example: dark theme, split hero, list-style catalog.
+# Apply with:  npm run spec:use dark-ocean
+version: 1
+
+app:
+  name: Harness Demo Store
+  tagline: Night mode, same pipeline
+  logo: "🌊"
+
+theme:
+  mode: dark
+  primaryColor: "#38bdf8"
+  accentColor: "#f472b6"
+  background: "#0b1220"
+  surface: "#131c2e"
+  textColor: "#e6edf7"
+  font: rounded
+  radius: 20
+
+banner:
+  enabled: true
+  tone: success
+  text: "Release 2: dark ocean theme rolled out with zero code changes."
+
+hero:
+  layout: split
+  title: Same app. Brand new look.
+  subtitle: Only the spec changed - the pipeline did the rest.
+  emoji: "🌊"
+  cta:
+    label: See live stats
+    target: stats
+
+sections:
+  - id: stats
+    type: stats
+    title: Live from the backend
+    metrics: [version, pod, environment, uptime]
+
+  - id: catalog
+    type: catalog
+    title: Featured products
+    layout: list
+    showPrice: true
+
+  - id: features
+    type: features
+    title: Why spec-driven?
+    columns: 3
+    items:
+      - { icon: "📝", title: Describe it, description: Write the change you want in the spec file. }
+      - { icon: "🔨", title: Build it, description: "Harness CI tests, builds and pushes the images." }
+      - { icon: "🚢", title: Deploy it, description: Harness CD rolls the new version out to GKE. }
+
+footer:
+  text: "Harness build & deploy demo - dark ocean"
+
+# Seed data for GET /api/items. Set allowEdit to true to show add/delete
+# controls (data is in-memory and per-pod, so keep replicas at 1 if you do).
+catalog:
+  allowEdit: false
+  items:
+    - { id: 1, name: Pipeline Starter Kit, description: Opinionated CI/CD pipeline templates., price: 49, emoji: "🧰", tag: popular }
+    - { id: 2, name: Canary Deployer, description: Gradual rollouts with automatic verification., price: 99, emoji: "🐤", tag: new }
+    - { id: 3, name: Feature Flag Pack, description: Decouple deploy from release., price: 29, emoji: "🚩" }
+    - { id: 4, name: Cost Insight Lens, description: See what every deployment costs., price: 79, emoji: "🔍" }

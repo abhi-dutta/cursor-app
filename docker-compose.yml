@@ -1,0 +1,27 @@
+# Run the full stack locally the same way it runs in the cluster:
+#   docker compose up --build        ->  http://localhost:8080
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-local}
+        GIT_SHA: ${GIT_SHA:-local}
+    environment:
+      APP_ENVIRONMENT: compose
+    expose:
+      - "3000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        APP_VERSION: ${APP_VERSION:-local}
+        GIT_SHA: ${GIT_SHA:-local}
+    environment:
+      BACKEND_URL: http://backend:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend

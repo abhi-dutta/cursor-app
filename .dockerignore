@@ -1,0 +1,10 @@
+**/node_modules
+.git
+.cursor
+k8s
+docs
+*.md
+frontend
+spec/examples
+**/.DS_Store
+**/npm-debug.log
