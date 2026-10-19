@@ -168,29 +168,32 @@ function loadSpecFile(file = DEFAULT_SPEC_PATH) {
 }
 
 /**
- * Holds the current spec. With `watch` it re-reads the file when it changes
- * (keeping the last good version if an edit is invalid); without it the spec
- * is loaded once at startup, which is what we want in a container.
+ * Holds the current spec. With `watch` it re-reads the file on each access and
+ * re-parses only when the content changed (keeping the last good version if an
+ * edit is invalid); without it the spec is loaded once at startup, which is what
+ * we want in a container. The file is read exactly once per check (no separate
+ * stat/exists call), so there is no check-then-use window.
  */
 class SpecProvider {
   constructor(file = DEFAULT_SPEC_PATH, { watch = false } = {}) {
     this.file = file;
     this.watch = watch;
     this.lastError = null;
-    this.current = loadSpecFile(file); // throws on startup if invalid -> fail fast
-    this.mtime = watch ? fs.statSync(file).mtimeMs : 0;
+    this.text = fs.readFileSync(file, 'utf8');
+    this.current = parseSpec(this.text); // throws on startup if invalid -> fail fast
   }
 
   get() {
-    if (this.watch) {
-      try {
-        const mtime = fs.statSync(this.file).mtimeMs;
-        if (mtime !== this.mtime) {
-          this.mtime = mtime;
-          this.current = loadSpecFile(this.file);
-          this.lastError = null;
-        }
-      } catch (err) {
+    if (!this.watch) return this.current;
+    try {
+      const text = fs.readFileSync(this.file, 'utf8');
+      if (text !== this.text) {
+        this.current = parseSpec(text);
+        this.text = text;
+      }
+      this.lastError = null;
+    } catch (err) {
+      if (err.message !== this.lastError) {
         this.lastError = err.message;
         console.error(`[spec] keeping last valid spec: ${err.message}`);
       }

@@ -8,8 +8,11 @@ metadata:
 spec:
   # On GKE this provisions an external passthrough Network Load Balancer with a public IP:
   #   kubectl -n <ns> get svc frontend
+  # `Local` keeps the real client IP (used by nginx/the backend for rate limiting) and avoids an
+  # extra hop; nodes without a frontend pod fail the LB health check and receive no traffic.
   # Prefer an Ingress / Gateway instead? See k8s/optional/ingress.yaml (and switch this to ClusterIP).
   type: LoadBalancer
+  externalTrafficPolicy: Local
   selector:
     app.kubernetes.io/name: frontend
   ports:

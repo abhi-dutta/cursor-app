@@ -5,7 +5,14 @@ const { createApp, readBuildInfo } = require('./app');
 const { SpecProvider, DEFAULT_SPEC_PATH } = require('./spec');
 const { ItemStore } = require('./store');
 
-const port = Number(process.env.PORT) || 3000;
+const log = (entry) => process.stdout.write(`${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`);
+
+const intFromEnv = (name, fallback) => {
+  const value = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+};
+
+const port = intFromEnv('PORT', 3000);
 const specPath = process.env.SPEC_PATH || DEFAULT_SPEC_PATH;
 const watch = process.env.SPEC_WATCH === 'true';
 const frontendDir = process.env.SERVE_FRONTEND ? path.resolve(process.cwd(), process.env.SERVE_FRONTEND) : undefined;
@@ -14,29 +21,60 @@ let specProvider;
 try {
   specProvider = new SpecProvider(specPath, { watch });
 } catch (err) {
-  console.error(`[startup] cannot load spec at ${specPath}\n${err.message}`);
+  log({ level: 'fatal', msg: 'cannot load spec', specPath, error: err.message });
   process.exit(1);
 }
 
 const store = new ItemStore(specProvider.get().spec.catalog.items);
 const state = { ready: true };
 const buildInfo = readBuildInfo();
-const app = createApp({ specProvider, store, buildInfo, frontendDir, state });
+const app = createApp({
+  specProvider,
+  store,
+  buildInfo,
+  frontendDir,
+  state,
+  trustProxy: intFromEnv('TRUST_PROXY', 0),
+  rateLimit: { max: intFromEnv('RATE_LIMIT_PER_MIN', 600), writeMax: intFromEnv('WRITE_RATE_LIMIT_PER_MIN', 60) },
+  log,
+});
 
 const server = app.listen(port, () => {
-  console.log(`[startup] backend ${buildInfo.version} (${buildInfo.commit}) listening on :${port}`);
-  console.log(`[startup] spec=${specPath} hash=${specProvider.get().hash} watch=${watch}`);
-  if (frontendDir) console.log(`[startup] serving frontend from ${frontendDir}`);
+  log({
+    level: 'info',
+    msg: 'listening',
+    port,
+    version: buildInfo.version,
+    commit: buildInfo.commit,
+    environment: buildInfo.environment,
+    specHash: specProvider.get().hash,
+    watch,
+    servingFrontend: Boolean(frontendDir),
+  });
 });
+
+// Outlive typical load balancer / proxy idle timeouts so keep-alive connections aren't reset mid-request.
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
 
 // Graceful shutdown: fail readiness, stop accepting connections and exit once
 // in-flight requests finish. (The k8s preStop hook already waits for the endpoint
 // to be removed from the Service before SIGTERM arrives.)
 function shutdown(signal) {
-  console.log(`[shutdown] ${signal} received, draining`);
+  log({ level: 'info', msg: 'shutting down', signal });
   state.ready = false;
   server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 25000).unref();
+  setTimeout(() => process.exit(1), 25_000).unref();
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Crash loudly (and let Kubernetes restart us) rather than limp on in an unknown state.
+process.on('uncaughtException', (err) => {
+  log({ level: 'fatal', msg: 'uncaught exception', error: err.message, stack: err.stack });
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  log({ level: 'fatal', msg: 'unhandled rejection', error: String(reason) });
+  process.exit(1);
+});

@@ -1,4 +1,4 @@
-# Run the full stack locally the same way it runs in the cluster:
+# Run the full stack locally the same way it runs in the cluster (same hardening):
 #   docker compose up --build        ->  http://localhost:8080
 services:
   backend:
@@ -10,8 +10,13 @@ services:
         GIT_SHA: ${GIT_SHA:-local}
     environment:
       APP_ENVIRONMENT: compose
+      TRUST_PROXY: "1"
     expose:
       - "3000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
 
   frontend:
     build:
@@ -23,5 +28,13 @@ services:
       BACKEND_URL: http://backend:3000
     ports:
       - "8080:8080"
+    read_only: true
+    tmpfs:
+      - /etc/nginx/conf.d:uid=101,gid=101,size=1m
+      - /tmp:uid=101,gid=101,size=32m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

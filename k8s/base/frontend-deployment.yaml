@@ -8,6 +8,7 @@ metadata:
 spec:
   replicas: 2
   revisionHistoryLimit: 5
+  progressDeadlineSeconds: 300
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -22,6 +23,9 @@ spec:
         app.kubernetes.io/name: frontend
         app.kubernetes.io/part-of: spec-demo
     spec:
+      serviceAccountName: frontend
+      automountServiceAccountToken: false
+      enableServiceLinks: false
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
@@ -29,9 +33,22 @@ spec:
         runAsGroup: 101
         seccompProfile:
           type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
       containers:
         - name: frontend
-          # Replaced by kustomize `images:` (or by Harness at deploy time)
+          # Tag is set by the pipeline (Harness patch) or `kustomize edit set image`
           image: spec-demo-frontend
           ports:
             - name: http
@@ -41,11 +58,11 @@ spec:
               value: http://backend:3000
           resources:
             requests:
-              cpu: 25m
-              memory: 32Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 200m
-              memory: 96Mi
+              cpu: 250m
+              memory: 128Mi
           startupProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 2
@@ -54,15 +71,27 @@ spec:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 10
             timeoutSeconds: 2
+            failureThreshold: 3
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 5
             timeoutSeconds: 2
+            failureThreshold: 2
           lifecycle:
             preStop:
               exec:
                 command: ["sleep", "5"]
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            # nginx renders its config here at startup and keeps pid/temp files in /tmp
+            - { name: nginx-conf, mountPath: /etc/nginx/conf.d }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: nginx-conf
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+        - name: tmp
+          emptyDir: { sizeLimit: 32Mi }

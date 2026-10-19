@@ -4,4 +4,4 @@ metadata:
   name: spec-demo-prod
   labels:
     app.kubernetes.io/part-of: spec-demo
-    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce: restricted

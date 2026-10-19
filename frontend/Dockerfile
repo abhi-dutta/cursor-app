@@ -14,13 +14,16 @@ LABEL org.opencontainers.image.title="spec-demo-frontend" \
 
 ENV BACKEND_URL=http://backend:3000
 
+USER root
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY public/ /usr/share/nginx/html/
 
 # Stamp the build so the UI can show which frontend version is being served.
-USER root
+# Static content stays root-owned and read-only for the nginx user.
 RUN printf '{"service":"frontend","version":"%s","commit":"%s","buildTime":"%s"}\n' \
-      "${APP_VERSION}" "${GIT_SHA}" "${BUILD_TIME}" > /usr/share/nginx/html/version.json
+      "${APP_VERSION}" "${GIT_SHA}" "${BUILD_TIME}" > /usr/share/nginx/html/version.json \
+ && chmod -R a+rX /usr/share/nginx/html /etc/nginx/snippets
 USER nginx
 
 EXPOSE 8080
