@@ -1,0 +1,227 @@
+# Reference copy of the Harness pipeline "spec-demo-build-and-deploy"
+# (project partner/demo). The live definition is stored inline in Harness; keep this file in sync
+# when you change the pipeline. See harness/README.md for the supporting resources.
+pipeline:
+  name: spec-demo-build-and-deploy
+  identifier: spec_demo_build_and_deploy
+  projectIdentifier: demo
+  orgIdentifier: partner
+  description: Test, scan, build and push both images, then deploy to GKE (dev -> approval -> prod)
+  tags:
+    app: spec-demo
+  properties:
+    ci:
+      codebase:
+        repoName: cursor-app
+        build: <+input>
+  variables:
+    - name: image_version
+      type: String
+      description: Tag used for both images and shown in the app footer (APP_VERSION)
+      required: false
+      value: 1.0.<+pipeline.sequenceId>
+  stages:
+    - stage:
+        name: Build
+        identifier: build
+        description: Scan, test, build and push the backend and frontend images
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+            override: true
+            paths: []
+          buildIntelligence:
+            enabled: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - parallel:
+                  - step:
+                      type: Gitleaks
+                      name: Secret Scan
+                      identifier: secret_scan
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                          args: {}
+                  - step:
+                      type: OsvScanner
+                      name: Dependency Scan
+                      identifier: dependency_scan
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: repository
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                          fail_on_severity: none
+              - step:
+                  type: Run
+                  name: Validate Spec and Test
+                  identifier: validate_spec_and_test
+                  spec:
+                    connectorRef: abhidocker
+                    image: node:22-alpine
+                    shell: Sh
+                    command: |-
+                      set -e
+                      npm run install:all
+                      npm run validate-spec
+                      npm test
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push Backend
+                  identifier: build_push_backend
+                  spec:
+                    connectorRef: abhidocker
+                    repo: dutabhis/spec-demo-backend
+                    tags:
+                      - <+pipeline.variables.image_version>
+                      - <+codebase.shortCommitSha>
+                    dockerfile: backend/Dockerfile
+                    context: .
+                    buildArgs:
+                      APP_VERSION: <+pipeline.variables.image_version>
+                      GIT_SHA: <+codebase.shortCommitSha>
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push Frontend
+                  identifier: build_push_frontend
+                  spec:
+                    connectorRef: abhidocker
+                    repo: dutabhis/spec-demo-frontend
+                    tags:
+                      - <+pipeline.variables.image_version>
+                      - <+codebase.shortCommitSha>
+                    dockerfile: frontend/Dockerfile
+                    context: frontend
+                    buildArgs:
+                      APP_VERSION: <+pipeline.variables.image_version>
+                      GIT_SHA: <+codebase.shortCommitSha>
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: Abort
+    - stage:
+        name: Deploy Dev
+        identifier: deploy_dev
+        description: Roll out to GKE namespace spec-demo-dev
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: spec_demo
+          environment:
+            environmentRef: spec_demo_dev
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: gke_dev
+          execution:
+            steps:
+              - step:
+                  type: K8sRollingDeploy
+                  name: Rolling Deploy
+                  identifier: rolling_deploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  type: K8sRollingRollback
+                  name: Rollback
+                  identifier: rollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+    - stage:
+        name: Approve Production
+        identifier: approve_production
+        description: Manual gate before production
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: HarnessApproval
+                  name: Approve Production Deploy
+                  identifier: approve_production_deploy
+                  timeout: 1d
+                  spec:
+                    approvalMessage: Dev deploy of <+pipeline.variables.image_version> succeeded. Approve to roll it out to production.
+                    includePipelineExecutionHistory: true
+                    isAutoRejectEnabled: false
+                    approvers:
+                      userGroups:
+                        - _project_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                    approverInputs: []
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: Abort
+    - stage:
+        name: Deploy Prod
+        identifier: deploy_prod
+        description: Roll out to GKE namespace spec-demo-prod
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: spec_demo
+          environment:
+            environmentRef: spec_demo_prod
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: gke_prod
+          execution:
+            steps:
+              - step:
+                  type: K8sRollingDeploy
+                  name: Rolling Deploy
+                  identifier: rolling_deploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  type: K8sRollingRollback
+                  name: Rollback
+                  identifier: rollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
