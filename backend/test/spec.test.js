@@ -57,6 +57,49 @@ sections:
   });
 });
 
+const withTestimonials = (extra) => `
+version: 1
+app: { name: X }
+sections:
+  - id: quotes
+    type: testimonials
+${extra}
+`;
+
+test('testimonials: a valid section parses, optional fields may be omitted', () => {
+  const { spec } = parseSpec(withTestimonials(`    columns: 2
+    items:
+      - { quote: "Great", name: Ann, role: SRE, avatar: "🙂", rating: 5 }
+      - { quote: "Fine", name: Bob }`));
+  assert.equal(spec.sections[0].items.length, 2);
+});
+
+test('testimonials: bad items and options are all reported', () => {
+  assert.throws(() => parseSpec(withTestimonials(`    columns: 7
+    items:
+      - { name: NoQuote }
+      - { quote: NoName }
+      - { quote: Bad, name: Rating, rating: 6 }
+      - { quote: Frac, name: Rating, rating: 2.5 }
+      - { quote: Zero, name: Rating, rating: 0 }
+      - just a string`)), (err) => {
+    assert.ok(err instanceof SpecError);
+    const text = err.errors.join('\n');
+    assert.match(text, /items\[0\]\.quote is required/);
+    assert.match(text, /items\[1\]\.name is required/);
+    assert.match(text, /items\[2\]\.rating must be a whole number from 1 to 5/);
+    assert.match(text, /items\[3\]\.rating/);
+    assert.match(text, /items\[4\]\.rating/);
+    assert.match(text, /items\[5\] must be a mapping/);
+    assert.match(text, /columns must be 1-4/);
+    return true;
+  });
+});
+
+test('testimonials: an empty items list is rejected', () => {
+  assert.throws(() => parseSpec(withTestimonials('    items: []')), /items must be a non-empty list/);
+});
+
 test('non-mapping sections are rejected cleanly', () => {
   assert.throws(() => parseSpec('version: 1\napp: { name: X }\ntheme: null\n'), SpecError);
 });
