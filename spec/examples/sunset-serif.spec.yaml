@@ -51,6 +51,15 @@ sections:
       - { icon: "1️⃣", title: Edit the spec, description: One file describes the whole UI. }
       - { icon: "2️⃣", title: Push to Git, description: The Harness pipeline is triggered. }
 
+  - id: testimonials
+    type: testimonials
+    title: Kind words
+    columns: 3
+    items:
+      - { quote: "Spec in Jira, change in prod. That's the demo.", name: Ana R., role: Eng Manager, avatar: "👩‍💼", rating: 4 }
+      - { quote: "Rollouts finally feel boring, in a good way.", name: Marcus T., role: SRE, rating: 5 }
+      - { quote: "We shipped a UI change in 4 minutes.", name: Priya N., role: Platform Lead }
+
 footer:
   text: "Harness build & deploy demo - sunset serif"
 

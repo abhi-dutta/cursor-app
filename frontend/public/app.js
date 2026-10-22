@@ -119,7 +119,24 @@ const SECTION_RENDERERS = {
   text(section) {
     return h('p', { class: 'text-body', text: section.body || '' });
   },
+
+  testimonials(section) {
+    return h('div', { class: `grid cols-${section.columns || 3}` },
+      section.items.map((it) =>
+        h('figure', { class: 'card testimonial' },
+          it.rating && h('div', { class: 'stars', role: 'img', 'aria-label': `${it.rating} out of 5 stars`, text: stars(it.rating) }),
+          h('blockquote', { text: it.quote }),
+          h('figcaption', {},
+            h('span', { class: 'avatar', text: it.avatar || it.name.charAt(0).toUpperCase() }),
+            h('span', { class: 'who' },
+              h('strong', { text: it.name }),
+              it.role && h('span', { text: it.role }))))));
+  },
 };
+
+function stars(rating) {
+  return '★'.repeat(rating) + '☆'.repeat(5 - rating);
+}
 
 function renderItem(item, section, editable) {
   const price = section.showPrice !== false && h('span', { class: 'price', text: money(item.price) });

@@ -40,7 +40,7 @@ hero:
     label: Browse the catalog
     target: catalog         # id of a section below
 
-# Rendered top to bottom. Types: features | catalog | stats | text
+# Rendered top to bottom. Types: features | catalog | stats | text | testimonials
 sections:
   - id: features
     type: features
@@ -62,6 +62,17 @@ sections:
     type: stats
     title: Live from the backend
     metrics: [version, pod, environment, uptime, requests, items]
+
+  # SCRUM-6: customer quotes rendered as cards
+  - id: testimonials
+    type: testimonials
+    title: Loved by delivery teams
+    subtitle: What people say after their first spec-driven release
+    columns: 3              # 1-4
+    items:
+      - { quote: "We shipped a UI change in 4 minutes.", name: Priya N., role: Platform Lead, avatar: "👩‍💻", rating: 5 }
+      - { quote: "Rollouts finally feel boring, in a good way.", name: Marcus T., role: SRE, avatar: "🧑‍🔧", rating: 5 }
+      - { quote: "Spec in Jira, change in prod. That's the demo.", name: Ana R., role: Eng Manager, avatar: "👩‍💼", rating: 4 }
 
   - id: catalog
     type: catalog

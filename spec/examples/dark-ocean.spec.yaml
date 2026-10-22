@@ -52,6 +52,14 @@ sections:
       - { icon: "🔨", title: Build it, description: "Harness CI tests, builds and pushes the images." }
       - { icon: "🚢", title: Deploy it, description: Harness CD rolls the new version out to GKE. }
 
+  - id: testimonials
+    type: testimonials
+    title: Loved by delivery teams
+    columns: 2
+    items:
+      - { quote: "We shipped a UI change in 4 minutes.", name: Priya N., role: Platform Lead, avatar: "👩‍💻", rating: 5 }
+      - { quote: "Rollouts finally feel boring, in a good way.", name: Marcus T., role: SRE, avatar: "🧑‍🔧", rating: 5 }
+
 footer:
   text: "Harness build & deploy demo - dark ocean"
 
