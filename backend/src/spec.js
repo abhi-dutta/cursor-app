@@ -7,7 +7,7 @@ const YAML = require('yaml');
 
 const DEFAULT_SPEC_PATH = path.resolve(__dirname, '../../spec/app.spec.yaml');
 
-const SECTION_TYPES = ['features', 'catalog', 'stats', 'text'];
+const SECTION_TYPES = ['features', 'catalog', 'stats', 'text', 'testimonials'];
 const METRICS = ['version', 'pod', 'environment', 'uptime', 'requests', 'items'];
 const FONTS = ['sans', 'serif', 'mono', 'rounded'];
 const TONES = ['info', 'success', 'warning'];
@@ -128,6 +128,18 @@ function validateSpec(spec) {
       }
       if (s.type === 'catalog' && s.layout !== undefined) oneOf(s.layout, ['grid', 'list'], `${where}.layout`);
       if (s.type === 'text') str(s.body, `${where}.body`);
+      if (s.type === 'testimonials') {
+        if (s.columns !== undefined && ![1, 2, 3, 4].includes(s.columns)) errors.push(`${where}.columns must be 1-4`);
+        if (!Array.isArray(s.items) || s.items.length === 0) errors.push(`${where}.items must be a non-empty list`);
+        else s.items.forEach((it, j) => {
+          const itemWhere = `${where}.items[${j}]`;
+          if (!it || typeof it.quote !== 'string' || !it.quote) errors.push(`${itemWhere}.quote is required`);
+          if (!it || typeof it.name !== 'string' || !it.name) errors.push(`${itemWhere}.name is required`);
+          if (it && it.rating !== undefined && (!Number.isInteger(it.rating) || it.rating < 1 || it.rating > 5)) {
+            errors.push(`${itemWhere}.rating must be an integer from 1 to 5`);
+          }
+        });
+      }
     });
     if (spec.hero.cta && !ids.has(spec.hero.cta.target)) {
       errors.push(`hero.cta.target "${spec.hero.cta.target}" does not match any section id`);

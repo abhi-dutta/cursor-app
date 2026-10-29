@@ -31,6 +31,7 @@ every problem (`npm run validate-spec`), and the backend refuses to start with a
 | `stats` | `title`, `subtitle`, `metrics[]`: any of `version pod environment uptime requests items` (live from the API) |
 | `catalog` | `title`, `subtitle`, `layout` (`grid` \| `list`), `showPrice` |
 | `text` | `title`, `subtitle`, `body` |
+| `testimonials` | `title`, `subtitle`, `columns` (1-4), `items[]: { quote, name, role?, avatar?, rating? }` — `quote` and `name` required; `rating` is an integer 1-5 |
 
 ## Examples
 

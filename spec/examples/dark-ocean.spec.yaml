@@ -37,6 +37,15 @@ sections:
     title: Live from the backend
     metrics: [version, pod, environment, uptime]
 
+  - id: testimonials
+    type: testimonials
+    title: Loved by delivery teams
+    subtitle: What people say after their first spec-driven release
+    columns: 2
+    items:
+      - { quote: "We shipped a UI change in 4 minutes.", name: Priya N., role: Platform Lead, avatar: "👩‍💻", rating: 5 }
+      - { quote: "Rollouts finally feel boring, in a good way.", name: Marcus T., role: SRE, avatar: "🧑‍🔧", rating: 5 }
+
   - id: catalog
     type: catalog
     title: Featured products
