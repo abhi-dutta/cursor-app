@@ -108,6 +108,23 @@ body {
 .empty { color: var(--muted); font-style: italic; }
 .text-body { max-width: 720px; font-size: 1.05rem; }
 
+.testimonial {
+  display: flex; flex-direction: column; gap: 12px; margin: 0;
+  border-top: 3px solid var(--primary);
+}
+.testimonial .stars { color: var(--accent); letter-spacing: 0.12em; font-size: 1.05rem; }
+.testimonial .quote { margin: 0; font-size: 1.05rem; }
+.testimonial .quote::before { content: "“"; }
+.testimonial .quote::after { content: "”"; }
+.testimonial .who { display: flex; align-items: center; gap: 12px; margin-top: auto; }
+.testimonial .avatar {
+  font-size: 1.4rem; width: 44px; height: 44px; display: grid; place-items: center; flex: none;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+.testimonial .name { font-weight: 700; }
+.testimonial .role { color: var(--muted); font-size: 0.85rem; }
+
 /* ---- footer ---- */
 .site-footer { margin-top: 40px; padding: 28px 0 40px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.9rem; }
 .site-footer .container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
