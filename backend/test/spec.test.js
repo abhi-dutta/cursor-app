@@ -57,6 +57,46 @@ sections:
   });
 });
 
+test('a testimonials section with quote, name, rating and columns is valid', () => {
+  const { spec } = parseSpec(`
+version: 1
+app: { name: X }
+sections:
+  - id: quotes
+    type: testimonials
+    columns: 3
+    items:
+      - { quote: "Shipped in minutes.", name: Priya N., rating: 5 }
+      - { quote: "Boring rollouts.", name: Marcus T. }
+`);
+  assert.equal(spec.sections[0].type, 'testimonials');
+  assert.equal(spec.sections[0].items.length, 2);
+});
+
+test('testimonials rejects a missing quote or name, a rating outside 1-5, and columns outside 1-4', () => {
+  const bad = `
+version: 1
+app: { name: X }
+sections:
+  - id: quotes
+    type: testimonials
+    columns: 9
+    items:
+      - { name: No quote, rating: 0 }
+      - { quote: "No name", rating: 6 }
+`;
+  assert.throws(() => parseSpec(bad), (err) => {
+    assert.ok(err instanceof SpecError);
+    const text = err.errors.join('\n');
+    assert.match(text, /items\[0\].quote is required/);
+    assert.match(text, /items\[1\].name is required/);
+    assert.match(text, /items\[0\].rating must be an integer from 1 to 5/);
+    assert.match(text, /items\[1\].rating must be an integer from 1 to 5/);
+    assert.match(text, /columns must be 1-4/);
+    return true;
+  });
+});
+
 test('non-mapping sections are rejected cleanly', () => {
   assert.throws(() => parseSpec('version: 1\napp: { name: X }\ntheme: null\n'), SpecError);
 });

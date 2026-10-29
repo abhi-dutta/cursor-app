@@ -37,6 +37,15 @@ sections:
     title: Live from the backend
     metrics: [version, pod, environment, uptime]
 
+  - id: testimonials
+    type: testimonials
+    title: Loved by delivery teams
+    columns: 3
+    items:
+      - { quote: "We shipped a UI change in 4 minutes.", name: Priya N., role: Platform Lead, avatar: "👩‍💻", rating: 5 }
+      - { quote: "Rollouts finally feel boring, in a good way.", name: Marcus T., role: SRE, avatar: "🧑‍🔧", rating: 5 }
+      - { quote: "Spec in Jira, change in prod. That's the demo.", name: Ana R., role: Eng Manager, avatar: "👩‍💼", rating: 4 }
+
   - id: catalog
     type: catalog
     title: Featured products

@@ -84,6 +84,18 @@ body {
 .feature h3 { margin: 0 0 4px; }
 .feature p { margin: 0; color: var(--muted); }
 
+.testimonial { display: flex; flex-direction: column; gap: 12px; }
+.testimonial .stars { color: var(--accent); letter-spacing: 0.12em; font-size: 1rem; }
+.testimonial blockquote { margin: 0; font-size: 1.02rem; }
+.testimonial .who { display: flex; align-items: center; gap: 10px; margin-top: auto; }
+.testimonial .avatar {
+  width: 40px; height: 40px; display: grid; place-items: center; flex: none;
+  border-radius: var(--radius); font-size: 1.3rem;
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+}
+.testimonial .name { font-weight: 700; }
+.testimonial .role { color: var(--muted); font-size: 0.85rem; }
+
 .stat .label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .stat .value { font-size: 1.5rem; font-weight: 700; color: var(--primary); word-break: break-all; }
 

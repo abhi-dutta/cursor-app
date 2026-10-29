@@ -29,6 +29,7 @@ every problem (`npm run validate-spec`), and the backend refuses to start with a
 |---|---|
 | `features` | `title`, `subtitle`, `columns` (1-4), `items[]: { icon, title, description }` |
 | `stats` | `title`, `subtitle`, `metrics[]`: any of `version pod environment uptime requests items` (live from the API) |
+| `testimonials` | `title`, `subtitle`, `columns` (1-4), `items[]: { quote, name, role?, avatar?, rating? }` — `rating` is an integer 1-5, shown as ★/☆ |
 | `catalog` | `title`, `subtitle`, `layout` (`grid` \| `list`), `showPrice` |
 | `text` | `title`, `subtitle`, `body` |
 

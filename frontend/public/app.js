@@ -80,6 +80,11 @@ function renderStatValue(metric) {
   return value || '–';
 }
 
+function stars(rating) {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return '';
+  return `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}`;
+}
+
 // ---------- section renderers --------------------------------------------------
 const SECTION_RENDERERS = {
   features(section) {
@@ -114,6 +119,19 @@ const SECTION_RENDERERS = {
     }
     if (catalog.allowEdit) wrapper.append(renderAddForm());
     return wrapper;
+  },
+
+  testimonials(section) {
+    return h('div', { class: `grid cols-${section.columns || 3} testimonials` },
+      section.items.map((it) =>
+        h('div', { class: 'card testimonial' },
+          it.rating && h('div', { class: 'stars', text: stars(it.rating) }),
+          h('blockquote', { text: it.quote }),
+          h('div', { class: 'who' },
+            it.avatar && h('span', { class: 'avatar', text: it.avatar }),
+            h('div', {},
+              h('div', { class: 'name', text: it.name }),
+              it.role && h('div', { class: 'role', text: it.role }))))));
   },
 
   text(section) {
