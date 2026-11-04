@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const express = require('express');
 const { validateItemInput } = require('./store');
+const { badgeText } = require('./badge');
 const { createRateLimiter } = require('./ratelimit');
 
 // Same policy nginx applies in the cluster; repeated here so local dev exercises it too.
@@ -140,6 +141,12 @@ function createApp({
     const item = store.get(req.itemId);
     if (!item) return res.status(404).json({ error: 'item not found' });
     res.json(item);
+  });
+
+  app.get('/api/items/:id/badge', parseId, (req, res) => {
+    const item = store.get(req.itemId);
+    if (!item) return res.status(404).json({ error: 'item not found' });
+    res.json({ badge: badgeText(item) });
   });
 
   app.post('/api/items', writeLimiter, requireWritesEnabled, (req, res) => {

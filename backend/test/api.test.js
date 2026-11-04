@@ -92,6 +92,15 @@ test('GET /api/stats counts API requests and items', async () => {
   });
 });
 
+test('GET /api/items/:id/badge formats a tagged item', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/items/1/badge`);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).badge, 'POPULAR · Pipeline Starter Kit · $49.00');
+    assert.equal((await fetch(`${base}/api/items/99/badge`)).status, 404);
+  });
+});
+
 test('items CRUD lifecycle (writes enabled)', async () => {
   await withServer(async (base) => {
     const list = await (await fetch(`${base}/api/items`)).json();

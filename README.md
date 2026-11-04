@@ -38,6 +38,7 @@ Full stack in containers, same wiring and hardening as the cluster: `docker comp
 | `GET /api/version` | Backend version, commit, environment, **pod name** (set at build / deploy time) |
 | `GET /api/stats` | Uptime, request count, item count |
 | `GET /api/items` `GET /api/items/:id` | Catalog |
+| `GET /api/items/:id/badge` | One-line share label for a catalog item |
 | `POST /api/items` `PUT /api/items/:id` `DELETE /api/items/:id` | Catalog writes. **Rejected with 403 unless `catalog.allowEdit: true` in the spec.** In-memory, per pod |
 | `GET /api/health` | Health via the frontend proxy |
 | `GET /healthz` `GET /readyz` | Kubernetes liveness / readiness (backend); frontend serves its own `/healthz` |

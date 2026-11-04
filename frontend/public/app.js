@@ -125,17 +125,40 @@ function renderItem(item, section, editable) {
   const price = section.showPrice !== false && h('span', { class: 'price', text: money(item.price) });
   const del = editable && h('button', { class: 'btn small danger', onclick: () => removeItem(item.id) }, 'Delete');
   const title = h('h3', {}, item.name, item.tag && h('span', { class: 'tag', text: item.tag }));
+  const badge = renderBadgeAction(item);
   if (section.layout === 'list') {
     return h('div', { class: 'card item' },
       h('div', { class: 'emoji', text: item.emoji || '📦' }),
-      h('div', { class: 'body' }, title, item.description && h('p', { text: item.description })),
+      h('div', { class: 'body' }, title, item.description && h('p', { text: item.description }), badge),
       price, del);
   }
   return h('div', { class: 'card item' },
     h('div', { class: 'emoji', text: item.emoji || '📦' }),
     title,
     item.description && h('p', { text: item.description }),
-    h('div', { class: 'row' }, price, del));
+    h('div', { class: 'row' }, price, del),
+    badge);
+}
+
+function renderBadgeAction(item) {
+  const result = h('p', { class: 'badge-result', hidden: true });
+  const button = h('button', {
+    class: 'btn small',
+    type: 'button',
+    onclick: async () => {
+      result.hidden = true;
+      result.classList.remove('error');
+      try {
+        const body = await api(`/api/items/${item.id}/badge`);
+        result.textContent = body.badge;
+      } catch (err) {
+        result.textContent = err.message;
+        result.classList.add('error');
+      }
+      result.hidden = false;
+    },
+  }, 'Copy badge');
+  return h('div', { class: 'badge-action' }, button, result);
 }
 
 function renderAddForm() {
