@@ -12,6 +12,10 @@ configMapGenerator:
     behavior: merge
     literals:
       - APP_ENVIRONMENT=dev
+      # Posts unhandled 500s to Jira only when the secret below exists.
+      # Create it out of band; do not commit the webhook URL:
+      #   kubectl -n spec-demo-dev create secret generic jira-incident-webhook --from-literal=url='https://...'
+      - INCIDENT_REPORTING=true
 
 # Small footprint for dev
 patches:
@@ -20,6 +24,15 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 1
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: JIRA_INCIDENT_WEBHOOK_URL
+            valueFrom:
+              secretKeyRef:
+                name: jira-incident-webhook
+                key: url
+                optional: true
   - target: { kind: Deployment, name: frontend }
     patch: |-
       - op: replace
