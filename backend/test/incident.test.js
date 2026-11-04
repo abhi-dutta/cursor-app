@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createIncidentReporter, fingerprintOf } = require('../src/incident');
 
-const SECRET_URL = 'https://automation.example/hooks/secret-token';
+const WEBHOOK_URL = 'https://automation.example/hooks/example-hook';
 
 function stackAt(line) {
   return [
@@ -27,7 +27,7 @@ test('a missing URL or a disabled reporter never calls fetch', async () => {
   let calls = 0;
   const fetchImpl = () => { calls += 1; return Promise.resolve({ ok: true }); };
   createIncidentReporter({ url: '', enabled: true, fetchImpl })(boom(), req);
-  createIncidentReporter({ url: SECRET_URL, enabled: false, fetchImpl })(boom(), req);
+  createIncidentReporter({ url: WEBHOOK_URL, enabled: false, fetchImpl })(boom(), req);
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(calls, 0);
 });
@@ -38,7 +38,7 @@ test('the webhook body carries the incident and not the webhook URL', async () =
     body = JSON.parse(opts.body);
     return Promise.resolve({ ok: true });
   };
-  createIncidentReporter({ url: SECRET_URL, enabled: true, fetchImpl })(boom(), req, {
+  createIncidentReporter({ url: WEBHOOK_URL, enabled: true, fetchImpl })(boom(), req, {
     version: '1.2.3', commit: 'abc123', pod: 'backend-1', environment: 'dev', specHash: 'deadbeef',
   });
   await new Promise((r) => setTimeout(r, 20));
@@ -51,7 +51,7 @@ test('the webhook body carries the incident and not the webhook URL', async () =
   assert.equal(body.environment, 'dev');
   assert.equal(body.specHash, 'deadbeef');
   assert.match(body.fingerprint, /^[0-9a-f]{8}$/);
-  assert.equal(JSON.stringify(body).includes('secret-token'), false);
+  assert.equal(JSON.stringify(body).includes('example-hook'), false);
 });
 
 test('the same fingerprint is skipped until the cooldown passes', async () => {
@@ -59,7 +59,7 @@ test('the same fingerprint is skipped until the cooldown passes', async () => {
   let calls = 0;
   const fetchImpl = () => { calls += 1; return Promise.resolve({ ok: true }); };
   const report = createIncidentReporter({
-    url: SECRET_URL, enabled: true, fetchImpl, now: () => now, cooldownMs: 1_000,
+    url: WEBHOOK_URL, enabled: true, fetchImpl, now: () => now, cooldownMs: 1_000,
   });
   report(boom(5), req);
   report(boom(80), req);
@@ -76,9 +76,9 @@ test('line numbers do not change the fingerprint', () => {
 
 test('a failed webhook is logged without the URL', async () => {
   const entries = [];
-  const fetchImpl = () => Promise.reject(new Error(`connect ${SECRET_URL} refused`));
+  const fetchImpl = () => Promise.reject(new Error(`connect ${WEBHOOK_URL} refused`));
   createIncidentReporter({
-    url: SECRET_URL,
+    url: WEBHOOK_URL,
     enabled: true,
     fetchImpl,
     log: (entry) => entries.push(entry),
@@ -86,6 +86,6 @@ test('a failed webhook is logged without the URL', async () => {
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(entries.length, 1);
   assert.equal(entries[0].msg, 'incident report failed');
-  assert.equal(JSON.stringify(entries[0]).includes('secret-token'), false);
-  assert.equal(JSON.stringify(entries[0]).includes(SECRET_URL), false);
+  assert.equal(JSON.stringify(entries[0]).includes('example-hook'), false);
+  assert.equal(JSON.stringify(entries[0]).includes(WEBHOOK_URL), false);
 });

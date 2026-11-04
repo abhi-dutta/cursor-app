@@ -35,7 +35,7 @@ function frameKey(stack) {
 }
 
 function fingerprintOf(errName, stack) {
-  return crypto.createHash('sha1').update(`${errName}\n${frameKey(stack)}`).digest('hex').slice(0, 8);
+  return crypto.createHash('sha256').update(`${errName}\n${frameKey(stack)}`).digest('hex').slice(0, 8);
 }
 
 function routeOf(req) {
