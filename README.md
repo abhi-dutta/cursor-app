@@ -67,10 +67,13 @@ Full stack in containers, same wiring and hardening as the cluster: `docker comp
 Tunables (env on the backend, via `backend-config` in `k8s/base/kustomization.yaml`): `APP_ENVIRONMENT`,
 `RATE_LIMIT_PER_MIN`, `WRITE_RATE_LIMIT_PER_MIN`, `PORT`, `SPEC_PATH`, `SPEC_WATCH`.
 
-Unhandled 500s can also be posted to a Jira Automation incoming webhook. Set `INCIDENT_REPORTING=true`
-and `JIRA_INCIDENT_WEBHOOK_URL`. The dev overlay turns reporting on and reads the URL from the optional
-Secret `jira-incident-webhook` (key `url`). With either value missing, the backend only logs the error.
-The URL is never written to logs or to the ticket body.
+Unhandled 500s can also be reported to Jira Cloud through its REST API (v3). Set `INCIDENT_REPORTING=true`
+plus `JIRA_BASE_URL` (https), `JIRA_PROJECT_KEY`, `JIRA_EMAIL` and `JIRA_API_TOKEN`. For each new error
+fingerprint the backend searches for an open issue labelled `fp-<fingerprint>`; it comments on that issue if
+one exists, otherwise it creates a Task labelled `incident`, `auto-created` and `fp-<fingerprint>`. The dev
+overlay sets the base URL and project key and reads the email and token from the optional Secret
+`jira-incident-credentials` (keys `email`, `token`). With any value missing, the backend only logs the error.
+The token is never written to logs or to the ticket.
 
 ## Build the images by hand
 

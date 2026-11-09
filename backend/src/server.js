@@ -29,9 +29,14 @@ try {
 const store = new ItemStore(specProvider.get().spec.catalog.items);
 const state = { ready: true };
 const buildInfo = readBuildInfo();
-const incidentWebhookUrl = process.env.JIRA_INCIDENT_WEBHOOK_URL || '';
-const incidentReporting = process.env.INCIDENT_REPORTING === 'true' && incidentWebhookUrl.length > 0;
-const reportIncident = createIncidentReporter({ url: incidentWebhookUrl, enabled: incidentReporting, log });
+const jira = {
+  baseUrl: process.env.JIRA_BASE_URL || '',
+  email: process.env.JIRA_EMAIL || '',
+  apiToken: process.env.JIRA_API_TOKEN || '',
+  projectKey: process.env.JIRA_PROJECT_KEY || '',
+};
+const incidentReporting = process.env.INCIDENT_REPORTING === 'true' && Object.values(jira).every(Boolean);
+const reportIncident = createIncidentReporter({ ...jira, enabled: incidentReporting, log });
 const app = createApp({
   specProvider,
   store,

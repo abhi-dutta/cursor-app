@@ -4,7 +4,29 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createIncidentReporter, fingerprintOf } = require('../src/incident');
 
-const WEBHOOK_URL = 'https://automation.example/hooks/example-hook';
+const JIRA = {
+  baseUrl: 'https://jira.example.test/',
+  email: 'bot@example.test',
+  apiToken: 'example-credential-1',
+  projectKey: 'DEMO',
+  enabled: true,
+};
+const AUTH = `Basic ${Buffer.from(`${JIRA.email}:${JIRA.apiToken}`).toString('base64')}`;
+
+/** Fake Jira: records calls; `open` is the issue list the search returns. */
+function fakeJira({ open = [], fail = null } = {}) {
+  const calls = [];
+  const fetchImpl = (url, opts) => {
+    const body = JSON.parse(opts.body);
+    calls.push({ url, headers: opts.headers, body });
+    if (fail) return Promise.reject(fail);
+    const json = url.endsWith('/search/jql') ? { issues: open } : { key: 'DEMO-9' };
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(json) });
+  };
+  return { calls, fetchImpl };
+}
+
+const settle = () => new Promise((r) => setTimeout(r, 30));
 
 function stackAt(line) {
   return [
@@ -23,50 +45,72 @@ function boom(line = 5) {
 
 const req = { id: 'abc', method: 'GET', baseUrl: '', route: { path: '/api/items/:id/badge' }, path: '/api/items/3/badge' };
 
-test('a missing URL or a disabled reporter never calls fetch', async () => {
-  let calls = 0;
-  const fetchImpl = () => { calls += 1; return Promise.resolve({ ok: true }); };
-  createIncidentReporter({ url: '', enabled: true, fetchImpl })(boom(), req);
-  createIncidentReporter({ url: WEBHOOK_URL, enabled: false, fetchImpl })(boom(), req);
-  await new Promise((r) => setTimeout(r, 20));
-  assert.equal(calls, 0);
+test('an incomplete config or a disabled reporter never calls fetch', async () => {
+  const jira = fakeJira();
+  const fetchImpl = jira.fetchImpl;
+  createIncidentReporter({ ...JIRA, enabled: false, fetchImpl })(boom(), req);
+  createIncidentReporter({ ...JIRA, apiToken: '', fetchImpl })(boom(), req);
+  createIncidentReporter({ ...JIRA, email: '', fetchImpl })(boom(), req);
+  createIncidentReporter({ ...JIRA, projectKey: 'bad key"', fetchImpl })(boom(), req);
+  createIncidentReporter({ ...JIRA, baseUrl: 'http://insecure.example.test', fetchImpl })(boom(), req);
+  await settle();
+  assert.equal(jira.calls.length, 0);
 });
 
-test('the webhook body carries the incident and not the webhook URL', async () => {
-  let body;
-  const fetchImpl = (_url, opts) => {
-    body = JSON.parse(opts.body);
-    return Promise.resolve({ ok: true });
-  };
-  createIncidentReporter({ url: WEBHOOK_URL, enabled: true, fetchImpl })(boom(), req, {
+test('a new fingerprint searches Jira, then creates a labelled Task', async () => {
+  const jira = fakeJira();
+  createIncidentReporter({ ...JIRA, fetchImpl: jira.fetchImpl })(boom(), req, {
     version: '1.2.3', commit: 'abc123', pod: 'backend-1', environment: 'dev', specHash: 'deadbeef',
   });
-  await new Promise((r) => setTimeout(r, 20));
-  assert.equal(body.errName, 'TypeError');
-  assert.equal(body.route, 'GET /api/items/:id/badge');
-  assert.equal(body.requestId, 'abc');
-  assert.equal(body.appVersion, '1.2.3');
-  assert.equal(body.gitSha, 'abc123');
-  assert.equal(body.pod, 'backend-1');
-  assert.equal(body.environment, 'dev');
-  assert.equal(body.specHash, 'deadbeef');
-  assert.match(body.fingerprint, /^[0-9a-f]{8}$/);
-  assert.equal(JSON.stringify(body).includes('example-hook'), false);
+  await settle();
+  assert.equal(jira.calls.length, 2);
+
+  const [search, create] = jira.calls;
+  const fingerprint = fingerprintOf('TypeError', stackAt(5));
+  assert.equal(search.url, 'https://jira.example.test/rest/api/3/search/jql');
+  assert.match(search.body.jql, new RegExp(`labels = "fp-${fingerprint}"`));
+  assert.match(search.body.jql, /project = "DEMO"/);
+  assert.match(search.body.jql, /statusCategory != Done/);
+  assert.deepEqual(search.body.fields, ['summary']);
+
+  assert.equal(create.url, 'https://jira.example.test/rest/api/3/issue');
+  assert.equal(create.headers.authorization, AUTH);
+  const { fields } = create.body;
+  assert.deepEqual(fields.project, { key: 'DEMO' });
+  assert.deepEqual(fields.issuetype, { name: 'Task' });
+  assert.equal(fields.summary, '[auto] TypeError in GET /api/items/:id/badge');
+  assert.deepEqual(fields.labels, ['incident', 'auto-created', `fp-${fingerprint}`]);
+  assert.equal(fields.description.type, 'doc');
+  const description = JSON.stringify(fields.description);
+  for (const expected of [fingerprint, 'abc123', 'backend-1', 'deadbeef', 'badge.js', 'abc']) {
+    assert.ok(description.includes(expected), `description mentions ${expected}`);
+  }
+  assert.equal(JSON.stringify(create.body).includes(JIRA.apiToken), false);
+});
+
+test('an open issue for the fingerprint gets a comment instead of a new Task', async () => {
+  const jira = fakeJira({ open: [{ id: '1', key: 'DEMO-4' }] });
+  createIncidentReporter({ ...JIRA, fetchImpl: jira.fetchImpl })(boom(), req, { pod: 'backend-2' });
+  await settle();
+  assert.equal(jira.calls.length, 2);
+  assert.equal(jira.calls[1].url, 'https://jira.example.test/rest/api/3/issue/DEMO-4/comment');
+  assert.equal(jira.calls[1].body.body.type, 'doc');
+  assert.ok(JSON.stringify(jira.calls[1].body).includes('backend-2'));
+  assert.equal(jira.calls.some((c) => c.url.endsWith('/rest/api/3/issue')), false);
 });
 
 test('the same fingerprint is skipped until the cooldown passes', async () => {
   let now = 1_000;
-  let calls = 0;
-  const fetchImpl = () => { calls += 1; return Promise.resolve({ ok: true }); };
+  const jira = fakeJira();
   const report = createIncidentReporter({
-    url: WEBHOOK_URL, enabled: true, fetchImpl, now: () => now, cooldownMs: 1_000,
+    ...JIRA, fetchImpl: jira.fetchImpl, now: () => now, cooldownMs: 1_000,
   });
   report(boom(5), req);
   report(boom(80), req);
   now += 1_000;
   report(boom(5), req);
-  await new Promise((r) => setTimeout(r, 20));
-  assert.equal(calls, 2);
+  await settle();
+  assert.equal(jira.calls.length, 4);
 });
 
 test('line numbers do not change the fingerprint', () => {
@@ -74,18 +118,30 @@ test('line numbers do not change the fingerprint', () => {
   assert.notEqual(fingerprintOf('TypeError', stackAt(5)), fingerprintOf('RangeError', stackAt(5)));
 });
 
-test('a failed webhook is logged without the URL', async () => {
+test('a failing Jira is logged without the token or auth header', async () => {
   const entries = [];
-  const fetchImpl = () => Promise.reject(new Error(`connect ${WEBHOOK_URL} refused`));
+  const jira = fakeJira({ fail: new Error(`401 for ${AUTH} token ${JIRA.apiToken}`) });
   createIncidentReporter({
-    url: WEBHOOK_URL,
-    enabled: true,
-    fetchImpl,
+    ...JIRA,
+    fetchImpl: jira.fetchImpl,
     log: (entry) => entries.push(entry),
   })(boom(), req);
-  await new Promise((r) => setTimeout(r, 20));
+  await settle();
   assert.equal(entries.length, 1);
   assert.equal(entries[0].msg, 'incident report failed');
-  assert.equal(JSON.stringify(entries[0]).includes('example-hook'), false);
-  assert.equal(JSON.stringify(entries[0]).includes(WEBHOOK_URL), false);
+  const logged = JSON.stringify(entries[0]);
+  assert.equal(logged.includes(JIRA.apiToken), false);
+  assert.equal(logged.includes(AUTH), false);
+  assert.equal(logged.includes(AUTH.replace('Basic ', '')), false);
+});
+
+test('a non-2xx answer from Jira is logged and does not throw', async () => {
+  const entries = [];
+  const fetchImpl = () => Promise.resolve({ ok: false, status: 403 });
+  assert.doesNotThrow(() => createIncidentReporter({
+    ...JIRA, fetchImpl, log: (entry) => entries.push(entry),
+  })(boom(), req));
+  await settle();
+  assert.equal(entries.length, 1);
+  assert.match(entries[0].error, /status 403/);
 });
