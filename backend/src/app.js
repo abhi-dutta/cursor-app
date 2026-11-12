@@ -1,9 +1,12 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const express = require('express');
 const { validateItemInput } = require('./store');
+const { badgeText } = require('./badge');
+const { routeOf } = require('./incident');
 const { createRateLimiter } = require('./ratelimit');
 
 // Same policy nginx applies in the cluster; repeated here so local dev exercises it too.
@@ -42,6 +45,8 @@ function readBuildInfo(env = process.env) {
  * @param {{ready: boolean}} [deps.state]  flipped to false while draining
  * @param {{max?: number, writeMax?: number, windowMs?: number}} [deps.rateLimit]
  * @param {(entry: object) => void} [deps.log]  structured request logger
+ * @param {(err: Error, req: import('express').Request, context: object) => void} [deps.reportIncident]
+ *   called after a 500 is sent; must not affect the response
  */
 function createApp({
   specProvider,
@@ -51,6 +56,7 @@ function createApp({
   state = { ready: true },
   rateLimit = {},
   log = jsonLog,
+  reportIncident = () => {},
 }) {
   const app = express();
   const startedAt = Date.now();
@@ -65,6 +71,7 @@ function createApp({
   // ---- request logging + common headers -------------------------------------
   app.use((req, res, next) => {
     const began = process.hrtime.bigint();
+    req.id = crypto.randomBytes(4).toString('hex');
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Referrer-Policy', 'no-referrer');
     if (req.path.startsWith('/api/')) {
@@ -76,6 +83,7 @@ function createApp({
       log({
         level: 'info',
         msg: 'request',
+        requestId: req.id,
         method: req.method,
         path: req.path,
         status: res.statusCode,
@@ -142,6 +150,12 @@ function createApp({
     res.json(item);
   });
 
+  app.get('/api/items/:id/badge', parseId, (req, res) => {
+    const item = store.get(req.itemId);
+    if (!item) return res.status(404).json({ error: 'item not found' });
+    res.json({ badge: badgeText(item) });
+  });
+
   app.post('/api/items', writeLimiter, requireWritesEnabled, (req, res) => {
     const { value, errors } = validateItemInput(req.body);
     if (errors) return res.status(400).json({ error: 'validation failed', details: errors });
@@ -184,8 +198,26 @@ function createApp({
   app.use((err, req, res, next) => {
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid JSON body' });
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'payload too large' });
-    log({ level: 'error', msg: 'unhandled error', error: err.message, stack: err.stack });
+    log({
+      level: 'error',
+      msg: 'unhandled error',
+      requestId: req.id,
+      route: routeOf(req),
+      error: err.message,
+      stack: err.stack,
+    });
     res.status(500).json({ error: 'internal server error' });
+    try {
+      reportIncident(err, req, {
+        version: buildInfo.version,
+        commit: buildInfo.commit,
+        pod: buildInfo.pod,
+        environment: buildInfo.environment,
+        specHash: specProvider.get().hash,
+      });
+    } catch (reportErr) {
+      log({ level: 'warn', msg: 'incident report failed', error: reportErr.message });
+    }
   });
 
   return app;

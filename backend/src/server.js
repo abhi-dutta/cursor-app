@@ -2,6 +2,7 @@
 
 const path = require('node:path');
 const { createApp, readBuildInfo } = require('./app');
+const { createIncidentReporter } = require('./incident');
 const { SpecProvider, DEFAULT_SPEC_PATH } = require('./spec');
 const { ItemStore } = require('./store');
 
@@ -28,6 +29,14 @@ try {
 const store = new ItemStore(specProvider.get().spec.catalog.items);
 const state = { ready: true };
 const buildInfo = readBuildInfo();
+const jira = {
+  baseUrl: process.env.JIRA_BASE_URL || '',
+  email: process.env.JIRA_EMAIL || '',
+  apiToken: process.env.JIRA_API_TOKEN || '',
+  projectKey: process.env.JIRA_PROJECT_KEY || '',
+};
+const incidentReporting = process.env.INCIDENT_REPORTING === 'true' && Object.values(jira).every(Boolean);
+const reportIncident = createIncidentReporter({ ...jira, enabled: incidentReporting, log });
 const app = createApp({
   specProvider,
   store,
@@ -36,6 +45,7 @@ const app = createApp({
   state,
   rateLimit: { max: intFromEnv('RATE_LIMIT_PER_MIN', 6000), writeMax: intFromEnv('WRITE_RATE_LIMIT_PER_MIN', 60) },
   log,
+  reportIncident,
 });
 
 const server = app.listen(port, () => {
@@ -49,6 +59,7 @@ const server = app.listen(port, () => {
     specHash: specProvider.get().hash,
     watch,
     servingFrontend: Boolean(frontendDir),
+    incidentReporting,
     });
 });
 

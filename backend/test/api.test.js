@@ -11,7 +11,7 @@ const { ItemStore } = require('../src/store');
  * Starts the app on an ephemeral port.
  * `allowEdit` overrides catalog.allowEdit from the shipped spec (default: true so CRUD can be tested).
  */
-async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit } = {}) {
+async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, reportIncident } = {}) {
   const real = new SpecProvider();
   const { spec, hash } = real.get();
   const specProvider = { get: () => ({ hash, spec: { ...spec, catalog: { ...spec.catalog, allowEdit } } }) };
@@ -22,6 +22,7 @@ async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit 
     state,
     frontendDir,
     rateLimit,
+    reportIncident,
     log: () => {},
     buildInfo: { service: 'backend', version: 'test', commit: 'abc123', environment: 'test', pod: 'test-pod' },
   });
@@ -89,6 +90,44 @@ test('GET /api/stats counts API requests and items', async () => {
     const stats = await (await fetch(`${base}/api/stats`)).json();
     assert.ok(stats.requests >= 2);
     assert.equal(stats.items, 4);
+  });
+});
+
+test('a 500 is reported after the response, and a successful request is not', async () => {
+  const calls = [];
+  await withServer(async (base) => {
+    const started = Date.now();
+    const failed = await fetch(`${base}/api/items/3/badge`);
+    assert.equal(failed.status, 500);
+    assert.ok(Date.now() - started < 500);
+    assert.equal((await fetch(`${base}/api/items/1/badge`)).status, 200);
+    const badJson = await fetch(`${base}/api/items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{',
+    });
+    assert.equal(badJson.status, 400);
+  }, {
+    allowEdit: true,
+    reportIncident: (err, req, context) => {
+      calls.push({ name: err.name, route: `${req.method} ${req.baseUrl || ''}${req.route.path}`, context });
+      return new Promise(() => {});
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, 'TypeError');
+  assert.equal(calls[0].route, 'GET /api/items/:id/badge');
+  assert.equal(calls[0].context.version, 'test');
+  assert.equal(calls[0].context.pod, 'test-pod');
+  assert.match(calls[0].context.specHash, /^[0-9a-f]{8}$/);
+});
+
+test('GET /api/items/:id/badge formats a tagged item', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/items/1/badge`);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).badge, 'POPULAR · Pipeline Starter Kit · $49.00');
+    assert.equal((await fetch(`${base}/api/items/99/badge`)).status, 404);
   });
 });
 

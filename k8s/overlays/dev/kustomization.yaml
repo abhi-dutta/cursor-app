@@ -12,6 +12,13 @@ configMapGenerator:
     behavior: merge
     literals:
       - APP_ENVIRONMENT=dev
+      # Creates Jira Tasks for unhandled 500s, but only when the secret below exists.
+      # Create it out of band; never commit the API token:
+      #   kubectl -n spec-demo-dev create secret generic jira-incident-credentials \
+      #     --from-literal=email='you@example.com' --from-literal=token='<jira api token>'
+      - INCIDENT_REPORTING=true
+      - JIRA_BASE_URL=https://abhishekd07.atlassian.net
+      - JIRA_PROJECT_KEY=SCRUM
 
 # Small footprint for dev
 patches:
@@ -20,6 +27,21 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 1
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: JIRA_EMAIL
+            valueFrom:
+              secretKeyRef:
+                name: jira-incident-credentials
+                key: email
+                optional: true
+          - name: JIRA_API_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: jira-incident-credentials
+                key: token
+                optional: true
   - target: { kind: Deployment, name: frontend }
     patch: |-
       - op: replace

@@ -100,6 +100,9 @@ body {
 .catalog.list .item h3 { margin: 0; }
 .catalog.list .item .emoji { font-size: 2rem; }
 .item .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.badge-action { margin-top: 10px; }
+.badge-result { margin: 8px 0 0; font-size: 0.88rem; }
+.badge-result.error { color: #d92d20; }
 
 .add-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
 .add-form input { font: inherit; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); }
