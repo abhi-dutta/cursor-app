@@ -73,7 +73,8 @@ fingerprint the backend searches for an open issue labelled `fp-<fingerprint>`; 
 one exists, otherwise it creates a Task labelled `incident`, `auto-created` and `fp-<fingerprint>`. The dev
 overlay sets the base URL and project key and reads the email and token from the optional Secret
 `jira-incident-credentials` (keys `email`, `token`). With any value missing, the backend only logs the error.
-The token is never written to logs or to the ticket.
+The token is never written to logs or to the ticket. Task titles end with a UTC timestamp. Setup, the
+`kubectl` validation commands and troubleshooting are in [docs/incident-reporting.md](docs/incident-reporting.md).
 
 ## Build the images by hand
 

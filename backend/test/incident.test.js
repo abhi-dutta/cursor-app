@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createIncidentReporter, fingerprintOf } = require('../src/incident');
+const { createIncidentReporter, fingerprintOf, stampOf, summaryOf } = require('../src/incident');
 
 const JIRA = {
   baseUrl: 'https://jira.example.test/',
@@ -59,7 +59,8 @@ test('an incomplete config or a disabled reporter never calls fetch', async () =
 
 test('a new fingerprint searches Jira, then creates a labelled Task', async () => {
   const jira = fakeJira();
-  createIncidentReporter({ ...JIRA, fetchImpl: jira.fetchImpl })(boom(), req, {
+  const clock = Date.UTC(2026, 10, 12, 13, 45, 7);
+  createIncidentReporter({ ...JIRA, fetchImpl: jira.fetchImpl, now: () => clock })(boom(), req, {
     version: '1.2.3', commit: 'abc123', pod: 'backend-1', environment: 'dev', specHash: 'deadbeef',
   });
   await settle();
@@ -78,11 +79,11 @@ test('a new fingerprint searches Jira, then creates a labelled Task', async () =
   const { fields } = create.body;
   assert.deepEqual(fields.project, { key: 'DEMO' });
   assert.deepEqual(fields.issuetype, { name: 'Task' });
-  assert.equal(fields.summary, '[auto] TypeError in GET /api/items/:id/badge');
+  assert.equal(fields.summary, '[auto] TypeError in GET /api/items/:id/badge (2026-11-12 13:45:07 UTC)');
   assert.deepEqual(fields.labels, ['incident', 'auto-created', `fp-${fingerprint}`]);
   assert.equal(fields.description.type, 'doc');
   const description = JSON.stringify(fields.description);
-  for (const expected of [fingerprint, 'abc123', 'backend-1', 'deadbeef', 'badge.js', 'abc']) {
+  for (const expected of ['2026-11-12 13:45:07 UTC', fingerprint, 'abc123', 'backend-1', 'deadbeef', 'badge.js', 'abc']) {
     assert.ok(description.includes(expected), `description mentions ${expected}`);
   }
   assert.equal(JSON.stringify(create.body).includes(JIRA.apiToken), false);
@@ -111,6 +112,13 @@ test('the same fingerprint is skipped until the cooldown passes', async () => {
   report(boom(5), req);
   await settle();
   assert.equal(jira.calls.length, 4);
+});
+
+test('the summary carries a UTC timestamp and stays within the Jira limit', () => {
+  assert.equal(stampOf(Date.UTC(2026, 0, 2, 3, 4, 5)), '2026-01-02 03:04:05 UTC');
+  const long = summaryOf({ errName: 'TypeError', route: `GET /${'x'.repeat(400)}`, at: '2026-01-02 03:04:05 UTC' });
+  assert.equal(long.length, 250);
+  assert.ok(long.endsWith(' (2026-01-02 03:04:05 UTC)'));
 });
 
 test('line numbers do not change the fingerprint', () => {

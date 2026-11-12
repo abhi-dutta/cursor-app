@@ -47,9 +47,24 @@ function routeOf(req) {
 const text = (value) => ({ type: 'text', text: value });
 const paragraph = (value) => ({ type: 'paragraph', content: [text(value)] });
 
+const MAX_SUMMARY = 250;
+
+/** "2026-11-12 13:45:07 UTC" from epoch milliseconds. */
+function stampOf(epochMs) {
+  return `${new Date(epochMs).toISOString().slice(0, 19).replace('T', ' ')} UTC`;
+}
+
+/** Ticket title: "[auto] <error> in <route> (<UTC timestamp>)", kept within Jira's summary limit. */
+function summaryOf(incident) {
+  const suffix = ` (${incident.at})`;
+  const base = `[auto] ${incident.errName} in ${incident.route}`.slice(0, MAX_SUMMARY - suffix.length);
+  return `${base}${suffix}`;
+}
+
 /** Atlassian Document Format body listing the incident facts and the stack. */
 function describeIncident(incident) {
   const facts = [
+    ['Time', incident.at],
     ['Fingerprint', incident.fingerprint],
     ['Route', incident.route],
     ['Error', `${incident.errName}: ${incident.error}`],
@@ -153,7 +168,7 @@ function createIncidentReporter({
       fields: {
         project: { key: projectKey },
         issuetype: { name: issueType },
-        summary: `[auto] ${incident.errName} in ${incident.route}`.slice(0, 250),
+        summary: summaryOf(incident),
         labels: ['incident', 'auto-created', label],
         description: describeIncident(incident),
       },
@@ -174,6 +189,7 @@ function createIncidentReporter({
       errName,
       error: clip(err?.message),
       fingerprint,
+      at: stampOf(at),
       route: routeOf(req),
       requestId: req?.id || '',
       appVersion: context.version || '',
@@ -195,4 +211,4 @@ function createIncidentReporter({
   };
 }
 
-module.exports = { createIncidentReporter, describeIncident, fingerprintOf, frameKey, routeOf };
+module.exports = { createIncidentReporter, describeIncident, fingerprintOf, frameKey, routeOf, stampOf, summaryOf };
