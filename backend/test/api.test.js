@@ -11,11 +11,19 @@ const { ItemStore } = require('../src/store');
  * Starts the app on an ephemeral port.
  * `allowEdit` overrides catalog.allowEdit from the shipped spec (default: true so CRUD can be tested).
  */
-async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, reportIncident } = {}) {
+async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, reportIncident, failGetId } = {}) {
   const real = new SpecProvider();
   const { spec, hash } = real.get();
   const specProvider = { get: () => ({ hash, spec: { ...spec, catalog: { ...spec.catalog, allowEdit } } }) };
   const store = new ItemStore(spec.catalog.items);
+  if (failGetId !== undefined) {
+    // Test hook: force an unexpected error for one item id to exercise 500 handling.
+    const get = store.get.bind(store);
+    store.get = (id) => {
+      if (id === failGetId) throw new TypeError('forced failure');
+      return get(id);
+    };
+  }
   const app = createApp({
     specProvider,
     store,
@@ -109,6 +117,7 @@ test('a 500 is reported after the response, and a successful request is not', as
     assert.equal(badJson.status, 400);
   }, {
     allowEdit: true,
+    failGetId: 3,
     reportIncident: (err, req, context) => {
       calls.push({ name: err.name, route: `${req.method} ${req.baseUrl || ''}${req.route.path}`, context });
       return new Promise(() => {});
@@ -128,6 +137,16 @@ test('GET /api/items/:id/badge formats a tagged item', async () => {
     assert.equal(res.status, 200);
     assert.equal((await res.json()).badge, 'POPULAR · Pipeline Starter Kit · $49.00');
     assert.equal((await fetch(`${base}/api/items/99/badge`)).status, 404);
+  });
+});
+
+test('GET /api/items/:id/badge works for an item without a tag', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/items/3/badge`);
+    assert.equal(res.status, 200);
+    const { badge } = await res.json();
+    assert.ok(!badge.includes('undefined'));
+    assert.match(badge, /^.+ · \$\d+\.\d{2}$/);
   });
 });
 
