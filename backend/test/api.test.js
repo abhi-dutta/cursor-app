@@ -11,11 +11,11 @@ const { ItemStore } = require('../src/store');
  * Starts the app on an ephemeral port.
  * `allowEdit` overrides catalog.allowEdit from the shipped spec (default: true so CRUD can be tested).
  */
-async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, reportIncident } = {}) {
+async function withServer(fn, { store: storeOverride, state, frontendDir, allowEdit = true, rateLimit, reportIncident } = {}) {
   const real = new SpecProvider();
   const { spec, hash } = real.get();
   const specProvider = { get: () => ({ hash, spec: { ...spec, catalog: { ...spec.catalog, allowEdit } } }) };
-  const store = new ItemStore(spec.catalog.items);
+  const store = storeOverride || new ItemStore(spec.catalog.items);
   const app = createApp({
     specProvider,
     store,
@@ -109,6 +109,10 @@ test('a 500 is reported after the response, and a successful request is not', as
     assert.equal(badJson.status, 400);
   }, {
     allowEdit: true,
+    // Item 3 is corrupt (no price), so the badge handler throws a genuine TypeError.
+    store: Object.assign(new ItemStore(new SpecProvider().get().spec.catalog.items), {
+      get: (id) => (id === 3 ? { id: 3, name: 'broken' } : new ItemStore(new SpecProvider().get().spec.catalog.items).get(id)),
+    }),
     reportIncident: (err, req, context) => {
       calls.push({ name: err.name, route: `${req.method} ${req.baseUrl || ''}${req.route.path}`, context });
       return new Promise(() => {});
@@ -128,6 +132,14 @@ test('GET /api/items/:id/badge formats a tagged item', async () => {
     assert.equal(res.status, 200);
     assert.equal((await res.json()).badge, 'POPULAR · Pipeline Starter Kit · $49.00');
     assert.equal((await fetch(`${base}/api/items/99/badge`)).status, 404);
+  });
+});
+
+test('GET /api/items/:id/badge works for an item without a tag (SCRUM-14)', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/items/3/badge`);
+    assert.equal(res.status, 200);
+    assert.match((await res.json()).badge, /^[^·]+ · \$\d+\.\d{2}$/);
   });
 });
 
