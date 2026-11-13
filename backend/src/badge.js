@@ -1,10 +1,10 @@
 'use strict';
 
-/** One-line share label: tier, product name, and price. */
+/** One-line share label: optional tier (from `tag`), product name, and price. */
 function badgeText(item) {
-  const tier = item.tag.toUpperCase();
   const amount = item.price.toFixed(2);
-  return `${tier} · ${item.name} · $${amount}`;
+  const label = `${item.name} · $${amount}`;
+  return typeof item.tag === 'string' && item.tag ? `${item.tag.toUpperCase()} · ${label}` : label;
 }
 
 module.exports = { badgeText };
