@@ -30,8 +30,9 @@ Placeholders used below:
   time, fingerprint, route, error, request ID, app version, git SHA, pod, spec hash, environment and stack.
 - Each pod reports a given fingerprint at most once per 10 minutes (in memory), so a burst of identical
   errors does not flood Jira.
-- **Intentional fault for the demo:** `GET /api/items/:id/badge` throws a `TypeError` for catalog items
-  without a `tag` (Feature Flag Pack and Cost Insight Lens). Items with a tag work.
+- **Former demo fault (fixed, SCRUM-15):** `GET /api/items/:id/badge` used to throw a `TypeError` for catalog
+  items without a `tag` (Feature Flag Pack and Cost Insight Lens). Untagged items now return a badge without the tier,
+  so `/api/items/3/badge` no longer returns a 500 and can't be used to trigger a demo incident.
 
 ## 2. Configuration reference
 

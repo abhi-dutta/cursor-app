@@ -11,11 +11,15 @@ const { ItemStore } = require('../src/store');
  * Starts the app on an ephemeral port.
  * `allowEdit` overrides catalog.allowEdit from the shipped spec (default: true so CRUD can be tested).
  */
-async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, reportIncident } = {}) {
+async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, reportIncident, failingStore } = {}) {
   const real = new SpecProvider();
   const { spec, hash } = real.get();
   const specProvider = { get: () => ({ hash, spec: { ...spec, catalog: { ...spec.catalog, allowEdit } } }) };
   const store = new ItemStore(spec.catalog.items);
+  if (failingStore) {
+    const get = store.get.bind(store);
+    store.get = (id) => (id === 3 ? { id, name: 'Broken', price: 'n/a' } : get(id)); // price.toFixed -> TypeError
+  }
   const app = createApp({
     specProvider,
     store,
@@ -109,6 +113,7 @@ test('a 500 is reported after the response, and a successful request is not', as
     assert.equal(badJson.status, 400);
   }, {
     allowEdit: true,
+    failingStore: true,
     reportIncident: (err, req, context) => {
       calls.push({ name: err.name, route: `${req.method} ${req.baseUrl || ''}${req.route.path}`, context });
       return new Promise(() => {});
@@ -120,6 +125,14 @@ test('a 500 is reported after the response, and a successful request is not', as
   assert.equal(calls[0].context.version, 'test');
   assert.equal(calls[0].context.pod, 'test-pod');
   assert.match(calls[0].context.specHash, /^[0-9a-f]{8}$/);
+});
+
+test('GET /api/items/:id/badge formats an untagged item without a tier', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/items/3/badge`);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).badge, 'Feature Flag Pack · $29.00');
+  });
 });
 
 test('GET /api/items/:id/badge formats a tagged item', async () => {

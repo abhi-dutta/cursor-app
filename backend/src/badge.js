@@ -2,9 +2,11 @@
 
 /** One-line share label: tier, product name, and price. */
 function badgeText(item) {
-  const tier = item.tag.toUpperCase();
   const amount = item.price.toFixed(2);
-  return `${tier} · ${item.name} · $${amount}`;
+  const parts = [item.name, `$${amount}`];
+  // `tag` is optional in the spec/store; omit the tier prefix for untagged items.
+  if (typeof item.tag === 'string' && item.tag) parts.unshift(item.tag.toUpperCase());
+  return parts.join(' · ');
 }
 
 module.exports = { badgeText };
