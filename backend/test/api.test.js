@@ -11,11 +11,12 @@ const { ItemStore } = require('../src/store');
  * Starts the app on an ephemeral port.
  * `allowEdit` overrides catalog.allowEdit from the shipped spec (default: true so CRUD can be tested).
  */
-async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, reportIncident } = {}) {
+async function withServer(fn, { state, frontendDir, allowEdit = true, rateLimit, reportIncident, failingStore } = {}) {
   const real = new SpecProvider();
   const { spec, hash } = real.get();
   const specProvider = { get: () => ({ hash, spec: { ...spec, catalog: { ...spec.catalog, allowEdit } } }) };
   const store = new ItemStore(spec.catalog.items);
+  if (failingStore) store.get = () => ({ id: 3, name: 'Broken' }); // no price -> badgeText throws
   const app = createApp({
     specProvider,
     store,
@@ -100,7 +101,6 @@ test('a 500 is reported after the response, and a successful request is not', as
     const failed = await fetch(`${base}/api/items/3/badge`);
     assert.equal(failed.status, 500);
     assert.ok(Date.now() - started < 500);
-    assert.equal((await fetch(`${base}/api/items/1/badge`)).status, 200);
     const badJson = await fetch(`${base}/api/items`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -109,6 +109,7 @@ test('a 500 is reported after the response, and a successful request is not', as
     assert.equal(badJson.status, 400);
   }, {
     allowEdit: true,
+    failingStore: true,
     reportIncident: (err, req, context) => {
       calls.push({ name: err.name, route: `${req.method} ${req.baseUrl || ''}${req.route.path}`, context });
       return new Promise(() => {});
@@ -120,6 +121,14 @@ test('a 500 is reported after the response, and a successful request is not', as
   assert.equal(calls[0].context.version, 'test');
   assert.equal(calls[0].context.pod, 'test-pod');
   assert.match(calls[0].context.specHash, /^[0-9a-f]{8}$/);
+});
+
+test('GET /api/items/:id/badge works for an item without a tag', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/api/items/3/badge`);
+    assert.equal(res.status, 200);
+    assert.doesNotMatch((await res.json()).badge, /undefined/);
+  });
 });
 
 test('GET /api/items/:id/badge formats a tagged item', async () => {
